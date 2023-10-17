@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=43.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vtkhdf-wrappers"
+version = "0.1.0"
+authors = [
+    {name = "Jared Magnusson", email = "jmag722@gmail.com"},
+]
+description = "My package description"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {file = "LICENSE"}
+keywords = ["vtkhdf", "python", "pyvista", "vtk", "hdf5"]
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+dynamic = ["dependencies"]
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+optional-dependencies = {dev = { file = ["requirements-dev.txt"] }}
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/jmag722/vtkhdf-wrappers"
+"Bug Reports" = "https://github.com/jmag722/vtkhdf-wrappers/issues"
