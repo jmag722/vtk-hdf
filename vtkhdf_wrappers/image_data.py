@@ -2,7 +2,6 @@ import h5py
 import numpy as np
 import pyvista
 import vtk
-import vtkhdf_wrappers.array_helpers as ah
 
 def read_vtkhdf(filename:str):
     reader = vtk.vtkHDFReader()
@@ -10,10 +9,9 @@ def read_vtkhdf(filename:str):
     reader.Update()    
     return pyvista.wrap(reader.GetOutput())
 
-def read_slice(hdf5_file:str, var:str, zslice:int, **kwargs):    
-    with h5py.File(hdf5_file, "r", **kwargs) as f:
-        dat = f["VTKHDF"]["PointData"][var][zslice, :, :]
-        return np.asfortranarray(np.transpose(dat))
+def read_slice(hdf5_file:h5py.File, var:str, zindex:int):    
+    dat = hdf5_file["VTKHDF"]["PointData"][var][zindex, :, :]
+    return np.asfortranarray(np.transpose(dat))
 
 def write_vtkhdf(filename:str, imagedata,
                  direction=(1, 0, 0, 0, 1, 0, 0, 0, 1),
@@ -36,7 +34,7 @@ def write_vtkhdf(filename:str, imagedata,
             new_shape = imagedata.dimensions[::-1]
             chunk_shape = np.copy(new_shape)
             chunk_shape[0] = 1 # z will be at index 0
-            field_data_group.attrs.create('Scalars', np.string_(var))            
+            field_data_group.attrs.create("Scalars", np.string_(var))   
             dset = field_data_group.create_dataset(
                 var, shape=new_shape, chunks=tuple(chunk_shape)
             )
