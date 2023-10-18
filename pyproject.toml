@@ -26,6 +26,9 @@ optional-dependencies = {dev = { file = ["requirements-dev.txt"] }}
 addopts = [
     "--import-mode=importlib",
 ]
+pythonpath = [
+  "."
+]
 
 [project.urls]
 "Homepage" = "https://github.com/jmag722/vtkhdf-wrappers"
