@@ -34,6 +34,13 @@ def test_read_slice(tmp_path, radial_box):
         np.testing.assert_allclose(slice, ida.get_var(box, "data")[:,:,i])
     h5_file.close()
 
+def test_read_vtkhdf(tmp_path, radial_box):
+    box = radial_box()
+    ida.write_vtkhdf(tmp_path/"mybox-vti.hdf", box)
+    readin = ida.read_vtkhdf(tmp_path/"mybox-vti.hdf")
+    np.testing.assert_allclose(ida.get_var(box, "data"),
+                               ida.get_var(readin, "data"))
+
 def test_init_vtkhdf(tmp_path):
     h5_file = h5py.File(tmp_path/"foo.hdf", "w")
     extent = (0,10,0,11,0,13)
