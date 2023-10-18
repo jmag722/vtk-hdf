@@ -1,20 +1,24 @@
 [build-system]
-requires = ["setuptools>=43.0.0", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "vtkhdf-wrappers"
-version = "0.1.0"
+version = "0.0.1"
 authors = [
     {name = "Jared Magnusson", email = "jmag722@gmail.com"},
 ]
-description = "My package description"
+description = "Python wrapper library for the new VTK HDF format."
 readme = "README.md"
 requires-python = ">=3.9"
 license = {file = "LICENSE"}
-keywords = ["vtkhdf", "python", "pyvista", "vtk", "hdf5"]
+keywords = [
+    "vtkhdf", "python", "pyvista", "vtk", "hdf5", "h5py",
+    "visualization", "wrapper"
+]
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
 ]
 
 dynamic = ["dependencies"]
