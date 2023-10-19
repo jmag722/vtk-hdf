@@ -19,7 +19,7 @@ def radial_box():
         X,Y,_ = ah.mesh(*ah.compute_axis_arrays(box.dimensions, box.spacing,
                                                 box.origin))
         data = np.sqrt(X*X+Y*Y)
-        ida.set_var(box, data, "data")
+        ida.set_imagedata(box, data, "data")
         return box
     return _method
 
@@ -31,15 +31,15 @@ def test_read_slice(tmp_path, radial_box):
         slice = ida.read_slice(h5_file, "data", i)
         assert slice.flags.f_contiguous
         assert slice.shape == box.dimensions[:-1]
-        np.testing.assert_allclose(slice, ida.get_var(box, "data")[:,:,i])
+        np.testing.assert_allclose(slice, ida.get_imagedata(box, "data")[:,:,i])
     h5_file.close()
 
 def test_read_vtkhdf(tmp_path, radial_box):
     box = radial_box()
     ida.write_vtkhdf(tmp_path/"mybox-vti.hdf", box)
     readin = ida.read_vtkhdf(tmp_path/"mybox-vti.hdf")
-    np.testing.assert_allclose(ida.get_var(box, "data"),
-                               ida.get_var(readin, "data"))
+    np.testing.assert_allclose(ida.get_imagedata(box, "data"),
+                               ida.get_imagedata(readin, "data"))
 
 def test_init_vtkhdf(tmp_path):
     h5_file = h5py.File(tmp_path/"foo.hdf", "w")
@@ -70,15 +70,26 @@ def test_init_vtkhdf(tmp_path):
 def test_create_dataset(tmp_path):
     h5_file = h5py.File(tmp_path/"foo.hdf", "w")
     dim = (11,23,15)
-    extent=(0,10,0,22,0,14)
-    ida.init_vtkhdf(h5_file, extent)
+    ida.init_vtkhdf(h5_file, ida.dimensions2extent(dim))
     ida.create_dataset(h5_file, dim, "myvar")
     assert h5_file["VTKHDF"]["PointData"].attrs["Scalars"] == b"myvar"
+    assert h5_file["VTKHDF"]["PointData"]["myvar"].shape == (15,23,11)
+    assert h5_file["VTKHDF"]["PointData"]["myvar"].chunks == (1,23,11)
+    h5_file.close()
+
+def test_create_dataset_c(tmp_path):
+    h5_file = h5py.File(tmp_path/"foo_c.hdf", "w")
+    dim = (11,23,15)
+    ida.init_vtkhdf(h5_file, ida.dimensions2extent(dim))
+    ida.create_dataset(h5_file, dim, "myvar", order="C")
+    assert h5_file["VTKHDF"]["PointData"].attrs["Scalars"] == b"myvar"
+    assert h5_file["VTKHDF"]["PointData"]["myvar"].shape == (11,23,15)
+    assert h5_file["VTKHDF"]["PointData"]["myvar"].chunks == (1,23,15)
     h5_file.close()
 
 def test_write_slice(tmp_path, radial_box):
     box = radial_box()
-    arr = ida.get_var(box, "data")
+    arr = ida.get_imagedata(box, "data")
     with h5py.File(tmp_path/"foo.hdf", "w") as h5_file:
         ida.init_vtkhdf(h5_file, box.extent)
         ida.create_dataset(h5_file, box.dimensions, "newvar")
@@ -89,4 +100,22 @@ def test_write_slice(tmp_path, radial_box):
         for i in range(box.dimensions[2]):
             slice = ida.read_slice(h5_file, "newvar", i)
             assert slice.shape == box.dimensions[:-1]
-            np.testing.assert_allclose(slice, ida.get_var(box, "data")[:,:,i])
+            np.testing.assert_allclose(slice, ida.get_imagedata(box, "data")[:,:,i])
+
+def test_write_slice_c(tmp_path):
+    shape = (1,10,4)
+    arr = np.random.rand(*shape)
+    file = "foo_c.hdf"
+    with h5py.File(tmp_path/file, "w") as h5_file:
+        ida.init_vtkhdf(h5_file, ida.dimensions2extent(shape))
+        ida.create_dataset(h5_file, shape, "newvar", order="C")
+        ida.write_slice(h5_file, arr[0,:,:], "newvar", 0)
+
+    with h5py.File(tmp_path/file, "r") as h5_file:
+        slice = ida.read_slice(h5_file, "newvar", 0)
+        assert slice.shape == shape[::-1][:-1]
+        np.testing.assert_allclose(slice, ida.c2f(arr[0,:,:]))
+
+def test_dimensions2extent():
+    assert ida.dimensions2extent((1,2,3)) == [0,0,0,1,0,2]
+    assert ida.dimensions2extent((5,3,1,2)) == [0,4,0,2,0,0,0,1]
