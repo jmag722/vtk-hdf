@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vtkhdf-wrappers"
+name = "vtk-hdf"
 version = "0.0.1"
 authors = [
     {name = "Jared Magnusson", email = "jmag722@gmail.com"},
@@ -13,8 +13,8 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = {file = "LICENSE"}
 keywords = [
-    "vtkhdf", "python", "pyvista", "vtk", "hdf5", "h5py",
-    "visualization", "wrapper"
+    "vtk-hdf", "python", "pyvista", "vtk", "hdf5", "h5py",
+    "visualization", "wrapper", "vtkhdf"
 ]
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
@@ -35,5 +35,5 @@ pythonpath = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/jmag722/vtkhdf-wrappers"
-"Bug Reports" = "https://github.com/jmag722/vtkhdf-wrappers/issues"
+"Homepage" = "https://github.com/jmag722/vtk-hdf"
+"Bug Reports" = "https://github.com/jmag722/vtk-hdf/issues"
