@@ -71,22 +71,25 @@ def dimensions2extent(dimensions):
 def extent2dimensions(extent):
     return tuple(x+1 for x in extent[1::2])
 
+def axis_length(dimensions, spacing):
+    return (np.array(dimensions)-1)*np.array(spacing)
+
 def center_origin(dimensions, spacing,
                    zero_z:bool=True) -> np.ndarray:
-    origin = -0.5*(np.array(dimensions)-1)*np.array(spacing)
+    origin = -0.5*axis_length(dimensions, spacing)
     if zero_z and origin.size == 3:
         origin[2] = 0.0
     return origin
 
 def get_axis(dimension:float, spacing:float, origin:float) -> np.ndarray:
-    return np.linspace(origin, origin + (dimension-1)*spacing, dimension,
+    return np.linspace(origin,
+                       origin + axis_length(dimension, spacing),
+                       dimension,
                        endpoint=True)
 
 def get_axes(dimensions, spacing, origin):
-    x = get_axis(dimensions[0], spacing[0], origin[0])
-    y = get_axis(dimensions[1], spacing[1], origin[1])
-    z = get_axis(dimensions[2], spacing[2], origin[2])
-    return x,y,z
+    return tuple([get_axis(dim, spacing[i], origin[i])
+                  for i,dim in enumerate(dimensions)])
 
 def mesh_axes(x,y,z):
     return np.meshgrid(x, y, z, indexing="ij")
