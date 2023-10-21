@@ -48,22 +48,20 @@ def test_initialize(tmp_path):
     direction = (0,0,1,1,0,0,0,1,0)
     v5i.initialize(h5_file, extent, origin=origin,
                     spacing=spacing, direction=direction)
-    assert bool(h5_file["VTKHDF"])
-    np.testing.assert_equal(h5_file.get("VTKHDF").attrs["Version"],
+    assert bool(h5_file[v5i.VTKHDF])
+    np.testing.assert_equal(h5_file.get(v5i.VTKHDF).attrs[v5i.VERSION],
                             np.array([1,0]))
-    np.testing.assert_equal(h5_file.get("VTKHDF").attrs["Type"],
-                            b"ImageData")
-    np.testing.assert_equal(h5_file.get("VTKHDF").attrs["Type"],
-                            b"ImageData")
-    np.testing.assert_equal(h5_file.get("VTKHDF").attrs["WholeExtent"],
+    np.testing.assert_equal(h5_file.get(v5i.VTKHDF).attrs[v5i.TYPE],
+                            np.string_(v5i.IMAGEDATA))
+    np.testing.assert_equal(h5_file.get(v5i.VTKHDF).attrs[v5i.EXTENT],
                             extent)
-    np.testing.assert_equal(h5_file.get("VTKHDF").attrs["Origin"],
+    np.testing.assert_equal(h5_file.get(v5i.VTKHDF).attrs[v5i.ORIGIN],
                             origin)
-    np.testing.assert_equal(h5_file.get("VTKHDF").attrs["Spacing"],
+    np.testing.assert_equal(h5_file.get(v5i.VTKHDF).attrs[v5i.SPACING],
                             spacing)
-    np.testing.assert_equal(h5_file.get("VTKHDF").attrs["Direction"],
+    np.testing.assert_equal(h5_file.get(v5i.VTKHDF).attrs[v5i.DIRECTION],
                             direction)
-    assert bool(h5_file["VTKHDF"]["PointData"])
+    assert bool(h5_file[v5i.VTKHDF][v5i.POINTDATA])
     h5_file.close()
 
 def test_create_dataset(tmp_path):
@@ -71,9 +69,9 @@ def test_create_dataset(tmp_path):
     dim = (11,23,15)
     v5i.initialize(h5_file, v5i.dimensions2extent(dim))
     v5i.create_dataset(h5_file, "myvar")
-    assert h5_file["VTKHDF"]["PointData"].attrs["Scalars"] == b"myvar"
-    assert h5_file["VTKHDF"]["PointData"]["myvar"].shape == (15,23,11)
-    assert h5_file["VTKHDF"]["PointData"]["myvar"].chunks == (1,23,11)
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA].attrs[v5i.SCALARS] == b"myvar"
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA]["myvar"].shape == (15,23,11)
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA]["myvar"].chunks == (1,23,11)
     h5_file.close()
 
 def test_create_dataset_c(tmp_path):
@@ -81,9 +79,9 @@ def test_create_dataset_c(tmp_path):
     dim_c = (11,23,15)
     v5i.initialize(h5_file, v5i.dimensions2extent(dim_c[::-1]))
     v5i.create_dataset(h5_file, "myvar")
-    assert h5_file["VTKHDF"]["PointData"].attrs["Scalars"] == b"myvar"
-    assert h5_file["VTKHDF"]["PointData"]["myvar"].shape == (11,23,15)
-    assert h5_file["VTKHDF"]["PointData"]["myvar"].chunks == (1,23,15)
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA].attrs[v5i.SCALARS] == b"myvar"
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA]["myvar"].shape == (11,23,15)
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA]["myvar"].chunks == (1,23,15)
     h5_file.close()
 
 def test_write_slice(tmp_path, radial_box):
