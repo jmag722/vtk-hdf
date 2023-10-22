@@ -1,7 +1,17 @@
 import h5py
 import numpy as np
+from numpy.typing import ArrayLike
 import pyvista
 import vtk
+
+"""
+Python interface for VTK HDF ImageData format.
+
+VTK Issue #18956 and its discourse at https://discourse.vtk.org/t/working-with-a-hdf-file-in-vtk/11233
+was helpful.
+
+See also https://www.kitware.com/developing-hdf5-readers-using-vtkpythonalgorithm/
+"""
 
 VTKHDF = "VTKHDF"
 IMAGEDATA = "ImageData"
@@ -15,23 +25,97 @@ DIRECTION = "Direction"
 SCALARS = "Scalars"
 
 def read_vtkhdf(filename:str):
+    """
+    Wrapper for reading VTK HDF file format.
+
+    Parameters
+    ----------
+    filename : str
+        VTK HDF filename.
+
+    Returns
+    -------
+    pyvista.DataSet
+        The PyVista wrapped dataset.
+    """    
     reader = vtk.vtkHDFReader()
     reader.SetFileName(filename)
     reader.Update()    
     return pyvista.wrap(reader.GetOutput())
 
-def c2f_reshape(array):
+def c2f_reshape(array:ArrayLike) -> np.ndarray:
+    """
+    Convert a row-major (C) array to column-major (Fortran).
+
+    Parameters
+    ----------
+    array : ArrayLike
+        C-order array
+
+    Returns
+    -------
+    np.ndarray
+        Transposed array in Fortran order
+    """    
     return np.asfortranarray(np.transpose(array))
 
-def f2c_reshape(array):
+def f2c_reshape(array:ArrayLike) -> np.ndarray:
+    """
+    Convert a column-major (Fortran) array to row-major (C).
+
+    Parameters
+    ----------
+    array : ArrayLike
+        Fortran-order array
+
+    Returns
+    -------
+    np.ndarray
+        Transposed array in C order
+    """
     return np.ascontiguousarray(np.transpose(array))
 
-def read_slice(hdf5_file:h5py.File, var:str, zindex:int) -> np.ndarray:    
-    dat = hdf5_file[VTKHDF][POINTDATA][var][zindex, :, :]
+def read_slice(hdf5_file:h5py.File, var:str, index:int) -> np.ndarray:
+    """
+    Read ImageData slice from an HDF5 file. Slices are taken on the 
+    last index of the corresponding column-major (F) ordered dataset.
+
+    Parameters
+    ----------
+    hdf5_file : h5py.File
+        VTK HDF file
+    var : str
+        ImageData variable name
+    index : int
+        Index of the last axis (2, typically "z") to extract from ImageData.
+
+    Returns
+    -------
+    np.ndarray
+        ImageData dataset
+    """    
+    dat = hdf5_file[VTKHDF][POINTDATA][var][index, :, :]
     return c2f_reshape(dat)
 
-def initialize(file:h5py.File, extent, origin=(0,0,0), spacing=(1,1,1),
-                direction=(1, 0, 0, 0, 1, 0, 0, 0, 1)):
+def initialize(file:h5py.File, extent:tuple, origin:tuple=(0,0,0),
+               spacing:tuple=(1,1,1),
+               direction:tuple=(1, 0, 0, 0, 1, 0, 0, 0, 1)):
+    """
+    Initialize a VTK HDF file group with correct attributes.
+
+    Parameters
+    ----------
+    file : h5py.File
+        VTK HDF file
+    extent : tuple
+        Extent of ImageData
+    origin : tuple, optional
+        Origin of ImageData, by default (0,0,0)
+    spacing : tuple, optional
+        Spacing of ImageData, by default (1,1,1)
+    direction : tuple, optional
+        Direction of ImageData axes, by default (1, 0, 0, 0, 1, 0, 0, 0, 1)
+    """    
     vtkhdf_group = file.create_group(VTKHDF)
     vtkhdf_group.attrs.create(VERSION, [1, 0])
     vtkhdf_group.attrs.create(TYPE, np.string_(IMAGEDATA))
@@ -42,6 +126,17 @@ def initialize(file:h5py.File, extent, origin=(0,0,0), spacing=(1,1,1),
     vtkhdf_group.create_group(POINTDATA)
 
 def create_dataset(file:h5py.File, name:str):
+    """
+    Create HDF5 dataset within file. Data is chunked by
+    the slowest-changing/last index in the flattened Fortran array.
+
+    Parameters
+    ----------
+    file : h5py.File
+        VTK HDF file
+    name : str
+        Dataset name to create
+    """    
     field_data_group = file[VTKHDF][POINTDATA]
     # reverse what is given in WholeExtent so paraview can read
     shape_c = extent2dimensions(file[VTKHDF].attrs[EXTENT])[::-1]
@@ -52,14 +147,43 @@ def create_dataset(file:h5py.File, name:str):
     )
 
 def write_slice(file:h5py.File, array:np.ndarray, name:str,
-                zindex:int):
+                index:int):
+    """
+    Write array slice to file.
+
+    Parameters
+    ----------
+    file : h5py.File
+        Opened VTK HDF file.
+    array : np.ndarray
+        Array to write to file
+    name : str
+        Dataset name to write to
+    index : int
+        ImageData slice index
+    """    
     # paraview will be transposing it to read
     arr_c = f2c_reshape(array) if array.flags.f_contiguous else array
-    file[VTKHDF][POINTDATA][name][zindex,:,:] = arr_c[np.newaxis,:,:]
+    file[VTKHDF][POINTDATA][name][index,:,:] = arr_c[np.newaxis,:,:]
 
 def write_vtkhdf(filename:str, imagedata,
                  direction=(1, 0, 0, 0, 1, 0, 0, 0, 1),
                  **kwargs):
+    """
+    Wrapper for writing ImageData object to VTK HDF format. This 
+    is mostly just for convenience and debugging purposes, as any
+    ImageData requiring HDF formatting would be too big to have sitting
+    in memory.
+
+    Parameters
+    ----------
+    filename : str
+        HDF VTK file to write to (assumed empty)
+    imagedata : vtk.ImageData|pyvista.ImageData
+        ImageData
+    direction : tuple, optional
+        ImageData direction, by default (1, 0, 0, 0, 1, 0, 0, 0, 1)
+    """    
     if type(imagedata) is vtk.vtkImageData:
         imagedata:pyvista.ImageData = pyvista.wrap(imagedata)
     with h5py.File(filename, "w", **kwargs) as f:
@@ -71,36 +195,181 @@ def write_vtkhdf(filename:str, imagedata,
                 write_slice(f, get_array(imagedata, var)[:,:,i], var, i)
 
 def set_array(image_data:pyvista.ImageData, array:np.ndarray, name:str):
+    """
+    Convenience function to write unflattened dataset to an ImageData
+    object.
+
+    Parameters
+    ----------
+    image_data : pyvista.ImageData
+        ImageData
+    array : np.ndarray
+        3D array to assign as ImageData dataset
+    name : str
+        New dataset name
+    """    
     image_data[name] = array.flatten(order="F")
 
 def get_array(image_data:pyvista.ImageData, name:str):
+    """
+    Convenience function to get unflattened dataset from an ImageData
+    object.
+
+    Parameters
+    ----------
+    image_data : pyvista.ImageData
+        ImageData object
+    name : str
+        Dataset name to get.
+
+    Returns
+    -------
+    np.ndarray
+        Entire dataset from ImageData
+    """    
     return image_data[name].reshape(image_data.dimensions, order="F")
 
-def dimensions2extent(dimensions):
+def dimensions2extent(dimensions:tuple):
+    """
+    Get ImageData extent from given dimensions.
+
+    Parameters
+    ----------
+    dimensions : tuple
+        Dimensions of array or ImageData object
+
+    Returns
+    -------
+    tuple
+        Array extents
+    """    
     return tuple(x for v in dimensions for x in (0,v-1))
 
-def extent2dimensions(extent):
+def extent2dimensions(extent:tuple):
+    """
+    Compute dataset dimensions from ImageData extent.
+
+    Parameters
+    ----------
+    extent : tuple
+        Extent of array or ImageData
+
+    Returns
+    -------
+    tuple
+        Dimensions of array or ImageData
+    """    
     return tuple(x+1 for x in extent[1::2])
 
-def axis_length(dimensions, spacing):
+def axis_length(dimensions:tuple, spacing:tuple):
+    """
+    Length of an array from its dimensions
+    and constant spacing.
+
+    Parameters
+    ----------
+    dimensions : tuple
+        Array dimensions
+    spacing : tuple
+        Array spacing in each dimension
+
+    Returns
+    -------
+    np.ndarray
+        Array length in every dimension
+    """    
     return (np.array(dimensions)-1)*np.array(spacing)
 
-def center_origin(dimensions, spacing,
-                   zero_z:bool=True) -> np.ndarray:
+def origin_of_centered_image(dimensions:tuple, spacing:tuple,
+                             zero_last_axis:bool=True) -> np.ndarray:
+    """
+    Obtain the origin for ImageData object (bottom left corner) assuming
+    (0,0,0) is located at the ImageData centroid. Axis 2 (typically "z")
+    is centered at the bottom slice by default, but can be centered at the
+    middle as in x and y.
+
+    Parameters
+    ----------
+    dimensions : tuple
+        Number of dimensions
+    spacing : tuple
+        Spacing in each dimension
+    zero_last_axis : bool, optional
+        Whether axis 2 ("z") should be centered at the bottom plane or middle,
+            by default True (bottom plane)
+
+    Returns
+    -------
+    np.ndarray
+        Origin of ImageData for (0,0,0) to be centered
+    """    
     origin = -0.5*axis_length(dimensions, spacing)
-    if zero_z and origin.size == 3:
+    if zero_last_axis and origin.size == 3:
         origin[2] = 0.0
     return origin
 
 def get_axis(dimension:float, spacing:float, origin:float) -> np.ndarray:
+    """
+    Get position of points along axis.
+
+    Parameters
+    ----------
+    dimension : float
+        Number of points
+    spacing : float
+        Spacing between points
+    origin : float
+        Origin of array of points
+
+    Returns
+    -------
+    np.ndarray
+        Array of positional points for the given dimension.
+    """    
     return np.linspace(origin,
                        origin + axis_length(dimension, spacing),
                        dimension,
                        endpoint=True)
 
-def get_axes(dimensions, spacing, origin):
+def get_axes(dimensions:tuple, spacing:tuple, origin:tuple):
+    """
+    Get one-dimensional axes for each dimension. Can be handy
+    when creating datasets in ImageData based upon position.
+
+    Parameters
+    ----------
+    dimensions : tuple
+        Number of points in each dimension
+    spacing : tuple
+        Spacing in each dimension
+    origin : tuple
+        Origin in each dimension
+
+    Returns
+    -------
+    tuple
+        One-dimensional axes arrays for each dimension
+    """    
     return tuple([get_axis(dim, spacing[i], origin[i])
                   for i,dim in enumerate(dimensions)])
 
-def mesh_axes(x,y,z):
+def mesh_axes(x:ArrayLike, y:ArrayLike, z:ArrayLike):
+    """
+    Convenient wrapper for np.meshgrid() with indexing
+    set to "ij".
+
+    Parameters
+    ----------
+    x : ArrayLike
+        x-array
+    y : ArrayLike
+        y-array
+    z : ArrayLike
+        z-array
+
+    Returns
+    -------
+    np.ndarray
+        x,y,z as meshgrid
+    """    
     return np.meshgrid(x, y, z, indexing="ij")

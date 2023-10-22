@@ -9,7 +9,7 @@ def radial_box():
     def _method():
         dimensions = np.array([151, 91, 113])
         spacing = np.array([.01, .011, .03])
-        origin = v5i.center_origin(dimensions, spacing)
+        origin = v5i.origin_of_centered_image(dimensions, spacing)
         box = pyvista.ImageData(
             dimensions=dimensions,
             spacing=spacing,
@@ -121,16 +121,16 @@ def test_extent2dimensions():
     assert v5i.extent2dimensions((0,5,0,3,0,4)) == (6,4,5)
     assert v5i.extent2dimensions((0,15,0,1,0,0,0,3)) == (16,2,1,4)
 
-def test_center_origin():
+def test_origin_of_centered_image():
     dim = (15,16,17)
     spacing = (1,1,3)
-    actual = v5i.center_origin(dim, spacing, True)
+    actual = v5i.origin_of_centered_image(dim, spacing, True)
     expected = np.array([-7,-7.5,0])
     np.testing.assert_equal(actual, expected)
-    actual = v5i.center_origin(dim, spacing, False)
+    actual = v5i.origin_of_centered_image(dim, spacing, False)
     expected = np.array([-7,-7.5,-24])
     np.testing.assert_equal(actual, expected)
-    actual = v5i.center_origin(5, 2)
+    actual = v5i.origin_of_centered_image(5, 2)
     expected = np.array([-4])
     np.testing.assert_equal(actual, expected)
 
