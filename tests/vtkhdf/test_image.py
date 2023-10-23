@@ -24,8 +24,8 @@ def radial_box():
 
 def test_read_slice(tmp_path, radial_box):
     box = radial_box()
-    v5i.write_vtkhdf(tmp_path/"mybox-vti.hdf", box)
-    h5_file = h5py.File(tmp_path/"mybox-vti.hdf", "r")
+    v5i.write_vtkhdf(tmp_path/"mybox-vti.vtkhdf", box)
+    h5_file = h5py.File(tmp_path/"mybox-vti.vtkhdf", "r")
     for i in range(box.dimensions[2]):
         slice = v5i.read_slice(h5_file, "data", i)
         assert slice.flags.f_contiguous
@@ -35,13 +35,13 @@ def test_read_slice(tmp_path, radial_box):
 
 def test_read_vtkhdf(tmp_path, radial_box):
     box = radial_box()
-    v5i.write_vtkhdf(tmp_path/"mybox-vti.hdf", box)
-    readin = v5i.read_vtkhdf(tmp_path/"mybox-vti.hdf")
+    v5i.write_vtkhdf(tmp_path/"mybox-vti.vtkhdf", box)
+    readin = v5i.read_vtkhdf(tmp_path/"mybox-vti.vtkhdf")
     np.testing.assert_allclose(v5i.get_array(box, "data"),
                                v5i.get_array(readin, "data"))
 
 def test_initialize(tmp_path):
-    h5_file = h5py.File(tmp_path/"foo.hdf", "w")
+    h5_file = h5py.File(tmp_path/"foo.vtkhdf", "w")
     extent = (0,10,0,11,0,13)
     origin = (.1,.1,0)
     spacing = (1,2,4)
@@ -65,17 +65,17 @@ def test_initialize(tmp_path):
     h5_file.close()
 
 def test_create_dataset(tmp_path):
-    h5_file = h5py.File(tmp_path/"foo.hdf", "w")
+    h5_file = h5py.File(tmp_path/"foo.vtkhdf", "w")
     dim = (11,23,15)
     v5i.initialize(h5_file, v5i.dimensions2extent(dim))
-    v5i.create_dataset(h5_file, "myvar")
+    v5i.create_dataset(h5_file, "myvar", compression="lzf")
     assert h5_file[v5i.VTKHDF][v5i.POINTDATA].attrs[v5i.SCALARS] == b"myvar"
     assert h5_file[v5i.VTKHDF][v5i.POINTDATA]["myvar"].shape == (15,23,11)
     assert h5_file[v5i.VTKHDF][v5i.POINTDATA]["myvar"].chunks == (1,23,11)
     h5_file.close()
 
 def test_create_dataset_c(tmp_path):
-    h5_file = h5py.File(tmp_path/"foo_c.hdf", "w")
+    h5_file = h5py.File(tmp_path/"foo_c.vtkhdf", "w")
     dim_c = (11,23,15)
     v5i.initialize(h5_file, v5i.dimensions2extent(dim_c[::-1]))
     v5i.create_dataset(h5_file, "myvar")
@@ -87,13 +87,13 @@ def test_create_dataset_c(tmp_path):
 def test_write_slice(tmp_path, radial_box):
     box = radial_box()
     arr = v5i.get_array(box, "data")
-    with h5py.File(tmp_path/"foo.hdf", "w") as h5_file:
+    with h5py.File(tmp_path/"foo.vtkhdf", "w") as h5_file:
         v5i.initialize(h5_file, box.extent)
-        v5i.create_dataset(h5_file, "newvar")
+        v5i.create_dataset(h5_file, "newvar", compression="lzf")
         for i in range(box.dimensions[2]):
             v5i.write_slice(h5_file, arr[:,:,i], "newvar", i)
 
-    with h5py.File(tmp_path/"foo.hdf", "r") as h5_file:
+    with h5py.File(tmp_path/"foo.vtkhdf", "r") as h5_file:
         for i in range(box.dimensions[2]):
             slice = v5i.read_slice(h5_file, "newvar", i)
             assert slice.shape == box.dimensions[:-1]
@@ -102,7 +102,7 @@ def test_write_slice(tmp_path, radial_box):
 def test_write_slice_c(tmp_path):
     shape_c = (1,10,4)
     arr = np.random.rand(*shape_c)
-    file = "foo_c.hdf"
+    file = "foo_c.vtkhdf"
     with h5py.File(tmp_path/file, "w") as h5_file:
         v5i.initialize(h5_file, v5i.dimensions2extent(shape_c[::-1]))
         v5i.create_dataset(h5_file, "newvar")

@@ -7,10 +7,13 @@ import vtk
 """
 Python interface for VTK HDF ImageData format.
 
-VTK Issue #18956 and its discourse at https://discourse.vtk.org/t/working-with-a-hdf-file-in-vtk/11233
-was helpful.
-
-See also https://www.kitware.com/developing-hdf5-readers-using-vtkpythonalgorithm/
+References & Examples Used:
+https://vtk.org/doc/nightly/html/VTKHDFFileFormat.html
+https://docs.vtk.org/en/latest/design_documents/VTKFileFormats.html#hdf-file-formats
+VTK Issue #18956 and its discourse at 
+    https://discourse.vtk.org/t/working-with-a-hdf-file-in-vtk/11233
+    was helpful in setting up a working case.
+https://www.kitware.com/developing-hdf5-readers-using-vtkpythonalgorithm/
 """
 
 VTKHDF = "VTKHDF"
@@ -26,7 +29,8 @@ SCALARS = "Scalars"
 
 def read_vtkhdf(filename:str):
     """
-    Wrapper for reading VTK HDF file format.
+    Wrapper for reading VTK HDF file format. Currently does not
+    read compressed VTKHDF datasets.
 
     Parameters
     ----------
@@ -125,7 +129,7 @@ def initialize(file:h5py.File, extent:tuple, origin:tuple=(0,0,0),
     vtkhdf_group.attrs.create(DIRECTION, direction)
     vtkhdf_group.create_group(POINTDATA)
 
-def create_dataset(file:h5py.File, name:str):
+def create_dataset(file:h5py.File, name:str, **kwargs):
     """
     Create HDF5 dataset within file. Data is chunked by
     the slowest-changing/last index in the flattened Fortran array.
@@ -143,7 +147,7 @@ def create_dataset(file:h5py.File, name:str):
     chunk_shape = (1, *shape_c[1:]) # single z-slices, z will be at index 0
     field_data_group.attrs.create(SCALARS, np.string_(name))   
     field_data_group.create_dataset(
-        name, shape=shape_c, chunks=chunk_shape
+        name, shape=shape_c, chunks=chunk_shape, **kwargs
     )
 
 def write_slice(file:h5py.File, array:np.ndarray, name:str,
@@ -353,23 +357,19 @@ def get_axes(dimensions:tuple, spacing:tuple, origin:tuple):
     return tuple([get_axis(dim, spacing[i], origin[i])
                   for i,dim in enumerate(dimensions)])
 
-def mesh_axes(x:ArrayLike, y:ArrayLike, z:ArrayLike):
+def mesh_axes(*xi:ArrayLike, indexing:str="ij", **kwargs):
     """
     Convenient wrapper for np.meshgrid() with indexing
     set to "ij".
 
     Parameters
     ----------
-    x : ArrayLike
-        x-array
-    y : ArrayLike
-        y-array
-    z : ArrayLike
-        z-array
+    xi : ArrayLike
+        1D arrays
 
     Returns
     -------
     np.ndarray
-        x,y,z as meshgrid
+        *xi as meshgrid
     """    
-    return np.meshgrid(x, y, z, indexing="ij")
+    return np.meshgrid(*xi, indexing=indexing, **kwargs)
