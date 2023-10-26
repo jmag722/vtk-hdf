@@ -29,8 +29,8 @@ SCALARS = "Scalars"
 
 def read_vtkhdf(filename:str):
     """
-    Wrapper for reading VTK HDF file format. Currently does not
-    read compressed VTKHDF datasets.
+    Wrapper for reading VTK HDF file format. Currently, the vtk.vtkHDFReader
+    does not support LZF compressed datasets (GZIP does work).
 
     Parameters
     ----------
@@ -134,6 +134,9 @@ def create_dataset(file:h5py.File, name:str, **kwargs):
     Create HDF5 dataset within file. Data is chunked by
     the slowest-changing/last index in the flattened Fortran array.
 
+    Paraview (as of 5.11.2) and vtk.vtkHDFReader do not currently support LZF
+    compression, but GZIP is supported.
+
     Parameters
     ----------
     file : h5py.File
@@ -170,7 +173,7 @@ def write_slice(file:h5py.File, array:np.ndarray, name:str,
     arr_c = f2c_reshape(array) if array.flags.f_contiguous else array
     file[VTKHDF][POINTDATA][name][index,:,:] = arr_c[np.newaxis,:,:]
 
-def write_vtkhdf(filename:str, imagedata,
+def write_vtkhdf(h5_file:h5py.File, imagedata,
                  direction=(1, 0, 0, 0, 1, 0, 0, 0, 1),
                  **kwargs):
     """
@@ -181,27 +184,26 @@ def write_vtkhdf(filename:str, imagedata,
 
     Parameters
     ----------
-    filename : str
-        HDF VTK file to write to (assumed empty)
-    imagedata : vtk.ImageData|pyvista.ImageData
+    h5_file : h5py.File
+        Opened HDF5 file to write to (assumed empty)
+    imagedata : vtk.ImageData | pyvista.ImageData
         ImageData
     direction : tuple, optional
         ImageData direction, by default (1, 0, 0, 0, 1, 0, 0, 0, 1)
     """    
     if type(imagedata) is vtk.vtkImageData:
         imagedata:pyvista.ImageData = pyvista.wrap(imagedata)
-    with h5py.File(filename, "w", **kwargs) as f:
-        initialize(f, imagedata.extent, origin=imagedata.origin,
-                    spacing=imagedata.spacing, direction=direction)
-        for var in imagedata.array_names:
-            create_dataset(f, var)
-            for i in range(imagedata.dimensions[2]):
-                write_slice(f, get_array(imagedata, var)[:,:,i], var, i)
+    initialize(h5_file, imagedata.extent, origin=imagedata.origin,
+               spacing=imagedata.spacing, direction=direction)
+    for var in imagedata.array_names:
+        create_dataset(h5_file, var, **kwargs)
+        for i in range(imagedata.dimensions[2]):
+            write_slice(h5_file, get_array(imagedata, var)[:,:,i], var, i)
 
 def set_array(image_data:pyvista.ImageData, array:np.ndarray, name:str):
     """
     Convenience function to write unflattened dataset to an ImageData
-    object.
+    object. Handles converting to column-major order.
 
     Parameters
     ----------
@@ -217,7 +219,7 @@ def set_array(image_data:pyvista.ImageData, array:np.ndarray, name:str):
 def get_array(image_data:pyvista.ImageData, name:str):
     """
     Convenience function to get unflattened dataset from an ImageData
-    object.
+    object. Handles converting to column-major order.
 
     Parameters
     ----------
