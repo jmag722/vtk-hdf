@@ -4,6 +4,10 @@ import pyvista
 import h5py
 import vtkhdf.image as v5i
 
+DUMMY_VAR = "myvar"
+DUMMY_VAR2 = "myvar2"
+DUMMY_IMAGE = "mybox-vti.hdf"
+
 @pytest.fixture
 def radial_box():
     def _method():
@@ -19,16 +23,23 @@ def radial_box():
                                                 box.origin))
         data = np.sqrt(X*X+Y*Y)
         data2 = X+45
-        v5i.set_array(box, data, "data")
-        v5i.set_array(box, data2, "data2")
+        v5i.set_array(box, data, DUMMY_VAR)
+        v5i.set_array(box, data2, DUMMY_VAR2)
         return box
     return _method
 
-def test_read_slice(tmp_path, radial_box):
-    box = radial_box()
-    with h5py.File(tmp_path/"mybox-vti.hdf", "w") as f:
-        v5i.write_vtkhdf(f, box)
-    with h5py.File(tmp_path/"mybox-vti.hdf", "r") as f:
+@pytest.fixture
+def write_dummy_image(tmp_path, radial_box):
+    def _method():
+        box = radial_box()
+        with h5py.File(tmp_path/DUMMY_IMAGE, "w") as f:
+            v5i.write_vtkhdf(f, box)
+        return box
+    return _method
+
+def test_read_slice(tmp_path, write_dummy_image):
+    box = write_dummy_image()
+    with h5py.File(tmp_path/DUMMY_IMAGE, "r") as f:
         for var in box.array_names:
             for i in range(box.dimensions[2]):
                 slice = v5i.read_slice(f, var, i)
@@ -37,11 +48,9 @@ def test_read_slice(tmp_path, radial_box):
                 assert slice.shape == box.dimensions[:-1]
                 np.testing.assert_allclose(slice, v5i.get_array(box, var)[:,:,i])
 
-def test_read_slice_c(tmp_path, radial_box):
-    box = radial_box()
-    with h5py.File(tmp_path/"mybox-vti.hdf", "w") as f:
-        v5i.write_vtkhdf(f, box)
-    with h5py.File(tmp_path/"mybox-vti.hdf", "r") as f:
+def test_read_slice_c(tmp_path, write_dummy_image):
+    box = write_dummy_image()
+    with h5py.File(tmp_path/DUMMY_IMAGE, "r") as f:
         for var in box.array_names:
             for i in range(box.dimensions[2]):
                 slice = v5i.read_slice(f, var, i, False)
@@ -53,11 +62,9 @@ def test_read_slice_c(tmp_path, radial_box):
                     v5i.f2c_reshape(v5i.get_array(box, var)[:,:,i])
                 )
 
-def test_read_vtkhdf(tmp_path, radial_box):
-    box = radial_box()
-    with h5py.File(tmp_path/"mybox-vti.hdf", "w") as f:
-        v5i.write_vtkhdf(f, box)
-    readin = v5i.read_vtkhdf(tmp_path/"mybox-vti.hdf")
+def test_read_vtkhdf(tmp_path, write_dummy_image):
+    box = write_dummy_image()
+    readin = v5i.read_vtkhdf(tmp_path/DUMMY_IMAGE)
     for var in box.array_names:
         np.testing.assert_allclose(v5i.get_array(box, var),
                                    v5i.get_array(readin, var))
@@ -90,52 +97,51 @@ def test_create_dataset(tmp_path):
     h5_file = h5py.File(tmp_path/"foo.hdf", "w")
     dim = (11,23,15)
     v5i.initialize(h5_file, v5i.dimensions2extent(dim))
-    v5i.create_dataset(h5_file, "myvar", compression="lzf")
-    assert h5_file[v5i.VTKHDF][v5i.POINTDATA].attrs[v5i.SCALARS] == b"myvar"
-    assert h5_file[v5i.VTKHDF][v5i.POINTDATA]["myvar"].shape == (15,23,11)
-    assert h5_file[v5i.VTKHDF][v5i.POINTDATA]["myvar"].chunks == (1,23,11)
+    v5i.create_dataset(h5_file, DUMMY_VAR, compression="lzf")
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA].attrs[v5i.SCALARS] == np.string_(DUMMY_VAR)
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA][DUMMY_VAR].shape == (15,23,11)
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA][DUMMY_VAR].chunks == (1,23,11)
     h5_file.close()
 
 def test_create_dataset_c(tmp_path):
     h5_file = h5py.File(tmp_path/"foo_c.hdf", "w")
     dim_c = (11,23,15)
     v5i.initialize(h5_file, v5i.dimensions2extent(dim_c[::-1]))
-    v5i.create_dataset(h5_file, "myvar")
-    assert h5_file[v5i.VTKHDF][v5i.POINTDATA].attrs[v5i.SCALARS] == b"myvar"
-    assert h5_file[v5i.VTKHDF][v5i.POINTDATA]["myvar"].shape == (11,23,15)
-    assert h5_file[v5i.VTKHDF][v5i.POINTDATA]["myvar"].chunks == (1,23,15)
+    v5i.create_dataset(h5_file, DUMMY_VAR)
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA].attrs[v5i.SCALARS] == np.string_(DUMMY_VAR)
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA][DUMMY_VAR].shape == (11,23,15)
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA][DUMMY_VAR].chunks == (1,23,15)
     h5_file.close()
 
 def test_write_slice(tmp_path, radial_box):
     box = radial_box()
-    arr = v5i.get_array(box, "data")
-    with h5py.File(tmp_path/"foo.hdf", "w") as h5_file:
+    arr = v5i.get_array(box, DUMMY_VAR)
+    with h5py.File(tmp_path/DUMMY_IMAGE, "w") as h5_file:
         v5i.initialize(h5_file, box.extent)
-        v5i.create_dataset(h5_file, "newvar", compression="lzf")
+        v5i.create_dataset(h5_file, DUMMY_VAR, compression="lzf")
         for i in range(box.dimensions[2]):
-            v5i.write_slice(h5_file, arr[:,:,i], "newvar", i)
+            v5i.write_slice(h5_file, arr[:,:,i], DUMMY_VAR, i)
 
-    with h5py.File(tmp_path/"foo.hdf", "r") as h5_file:
+    with h5py.File(tmp_path/DUMMY_IMAGE, "r") as h5_file:
         for i in range(box.dimensions[2]):
-            slice = v5i.read_slice(h5_file, "newvar", i)
+            slice = v5i.read_slice(h5_file, DUMMY_VAR, i)
             assert slice.shape == box.dimensions[:-1]
-            np.testing.assert_allclose(slice, v5i.get_array(box, "data")[:,:,i])
+            np.testing.assert_allclose(slice, v5i.get_array(box, DUMMY_VAR)[:,:,i])
 
 def test_write_slice_c(tmp_path):
     shape_c = (1,10,4)
     arr = np.random.rand(*shape_c)
-    file = "foo_c.hdf"
-    with h5py.File(tmp_path/file, "w") as h5_file:
+    with h5py.File(tmp_path/DUMMY_IMAGE, "w") as h5_file:
         v5i.initialize(h5_file, v5i.dimensions2extent(shape_c[::-1]))
-        v5i.create_dataset(h5_file, "newvar")
-        v5i.write_slice(h5_file, arr[0,:,:], "newvar", 0)
+        v5i.create_dataset(h5_file, DUMMY_VAR)
+        v5i.write_slice(h5_file, arr[0,:,:], DUMMY_VAR, 0)
 
-    with h5py.File(tmp_path/file, "r") as h5_file:
-        slice_f = v5i.read_slice(h5_file, "newvar", 0)
+    with h5py.File(tmp_path/DUMMY_IMAGE, "r") as h5_file:
+        slice_f = v5i.read_slice(h5_file, DUMMY_VAR, 0)
         assert slice_f.shape == shape_c[::-1][:-1]
         np.testing.assert_allclose(slice_f, v5i.c2f_reshape(arr[0,:,:]))
 
-        slice = v5i.read_slice(h5_file, "newvar", 0, False)
+        slice = v5i.read_slice(h5_file, DUMMY_VAR, 0, False)
         assert slice.shape == shape_c[1:]
         np.testing.assert_allclose(slice, arr[0,:,:])
 
