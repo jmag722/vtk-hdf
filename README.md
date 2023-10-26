@@ -68,7 +68,7 @@ As VTK uses column-major ordering (often called Fortran ordering), the data will
         slice = np.sqrt(x[:, np.newaxis]**2 + y**2, order="F")
         v5i.write_slice(f, slice, "data", k)
 ```
-**Note**: If the user was working with C-order numpy arrays, the dimensions, origin, and spacing input to `v5i.initialize` must be reversed. No modification needs to be made to the C-arrays themselves: `v5i.write_slice` handles transposing of the data where needed. However, `v5i.read_slice` will output all slices in F-order.
+**Note**: If the user was working with C-order numpy arrays, the dimensions, origin, and spacing input to `v5i.initialize` must be reversed. No modification needs to be made to the C-arrays themselves: `v5i.write_slice` handles transposing of the data when needed. Slices read via `v5i.read_slice` can be output in F or C-order.
 
 Now that we've written to this large file, we can access it later by slice as needed (or all at once if possible).
 ```python

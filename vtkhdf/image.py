@@ -79,10 +79,14 @@ def f2c_reshape(array:ArrayLike) -> np.ndarray:
     """
     return np.ascontiguousarray(np.transpose(array))
 
-def read_slice(hdf5_file:h5py.File, var:str, index:int) -> np.ndarray:
+def read_slice(hdf5_file:h5py.File, var:str, index:int,
+               f_contiguous:bool=True) -> np.ndarray:
     """
     Read ImageData slice from an HDF5 file. Slices are taken on the 
     last index of the corresponding column-major (F) ordered dataset.
+
+    By default, slices are output in Fortran order to match 
+    ImageData storage.
 
     Parameters
     ----------
@@ -92,14 +96,17 @@ def read_slice(hdf5_file:h5py.File, var:str, index:int) -> np.ndarray:
         ImageData variable name
     index : int
         Index of the last axis (2, typically "z") to extract from ImageData.
+    f_contiguous : bool
+        Whether to return slice in Fortran or C, order,
+        by default True (Fortran)  
 
     Returns
     -------
     np.ndarray
-        ImageData dataset
+        ImageData slice
     """    
     dat = hdf5_file[VTKHDF][POINTDATA][var][index, :, :]
-    return c2f_reshape(dat)
+    return c2f_reshape(dat) if f_contiguous else dat
 
 def initialize(file:h5py.File, extent:tuple, origin:tuple=(0,0,0),
                spacing:tuple=(1,1,1),

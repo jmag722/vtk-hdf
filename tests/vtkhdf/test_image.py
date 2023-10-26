@@ -33,8 +33,25 @@ def test_read_slice(tmp_path, radial_box):
             for i in range(box.dimensions[2]):
                 slice = v5i.read_slice(f, var, i)
                 assert slice.flags.f_contiguous
+                assert not slice.flags.c_contiguous
                 assert slice.shape == box.dimensions[:-1]
                 np.testing.assert_allclose(slice, v5i.get_array(box, var)[:,:,i])
+
+def test_read_slice_c(tmp_path, radial_box):
+    box = radial_box()
+    with h5py.File(tmp_path/"mybox-vti.hdf", "w") as f:
+        v5i.write_vtkhdf(f, box)
+    with h5py.File(tmp_path/"mybox-vti.hdf", "r") as f:
+        for var in box.array_names:
+            for i in range(box.dimensions[2]):
+                slice = v5i.read_slice(f, var, i, False)
+                assert slice.flags.c_contiguous
+                assert not slice.flags.f_contiguous
+                assert slice.shape == box.dimensions[:-1][::-1]
+                np.testing.assert_allclose(
+                    slice, 
+                    v5i.f2c_reshape(v5i.get_array(box, var)[:,:,i])
+                )
 
 def test_read_vtkhdf(tmp_path, radial_box):
     box = radial_box()
@@ -114,9 +131,14 @@ def test_write_slice_c(tmp_path):
         v5i.write_slice(h5_file, arr[0,:,:], "newvar", 0)
 
     with h5py.File(tmp_path/file, "r") as h5_file:
-        slice = v5i.read_slice(h5_file, "newvar", 0)
-        assert slice.shape == shape_c[::-1][:-1]
-        np.testing.assert_allclose(slice, v5i.c2f_reshape(arr[0,:,:]))
+        slice_f = v5i.read_slice(h5_file, "newvar", 0)
+        assert slice_f.shape == shape_c[::-1][:-1]
+        np.testing.assert_allclose(slice_f, v5i.c2f_reshape(arr[0,:,:]))
+
+        slice = v5i.read_slice(h5_file, "newvar", 0, False)
+        assert slice.shape == shape_c[1:]
+        np.testing.assert_allclose(slice, arr[0,:,:])
+
 
 def test_dimensions2extent():
     assert v5i.dimensions2extent((1,2,3)) == (0,0,0,1,0,2)
