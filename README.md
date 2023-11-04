@@ -1,6 +1,11 @@
 # vtk-hdf
 Python interface to read and write the VTK HDF format.
 
+## Installation & Paraview
+Dependencies are given in the [requirements](requirements.txt) file.
+
+VTK HDF format is relatively new, and will require a recent vtk library to support it. For visualization, this means you'll need Paraview 5.10 or later for basic VTK HDF support. However, for using cell data with the ImageData HDF format (as an example), I needed a nightly build of Paraview in order to get the cell data visualization to work (the latest 5.11.2 release had not worked).
+
 ## Quick Start
 ### Example 1: Reading and writing entire ImageData datasets at once
 In the most trivial case, assume you have an ImageData object (vtk.ImageData or pyvista.ImageData) that you'd like to write to HDF5. Such an object could be initialized as:

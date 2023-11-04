@@ -1,4 +1,4 @@
 h5py
 numpy
-pyvista
-vtk
+pyvista>=0.40.0
+vtk>=9.1.0
