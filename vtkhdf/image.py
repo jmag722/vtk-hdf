@@ -1,6 +1,7 @@
 import h5py
 import numpy as np
 from numpy.typing import ArrayLike
+from collections.abc import Sequence
 import pyvista
 import vtk
 
@@ -22,6 +23,7 @@ VTKHDF = "VTKHDF"
 IMAGEDATA = "ImageData"
 POINTDATA = "PointData"
 CELLDATA = "CellData"
+FIELDDATA = "FieldData"
 VERSION = "Version"
 TYPE = "Type"
 EXTENT = "WholeExtent"
@@ -84,7 +86,7 @@ def f2c_reshape(array:ArrayLike) -> np.ndarray:
 
 def get_dataset(h5_file:h5py.File, var:str) -> h5py.Dataset:
     """
-    Get dataset from VTK HDF file, either point or cell data.
+    Get dataset from VTK HDF file, either point, cell, or field data.
     Note the data has NOT been transposed to Fortran order.
 
     Parameters
@@ -92,17 +94,27 @@ def get_dataset(h5_file:h5py.File, var:str) -> h5py.Dataset:
     h5_file : h5py.File
         opened VTK HDF file to read
     var : str
-        Variable to return. Variable can represent either point or cell data
+        Variable to return. Variable can represent either point, cell
+        or field data.
 
     Returns
     -------
     h5py.Dataset
-        ImageData dataset to return, either cell or point data
-    """    
-    return (
-        get_point_dataset(h5_file, var) if var in h5_file[VTKHDF][POINTDATA]
-        else get_cell_dataset(h5_file, var)
-    )
+        ImageData dataset to return, either point/cell/field data
+
+    Raises
+    ------
+    KeyError
+        If variable name is neither point, cell, or field data key
+    """   
+    if var in h5_file[VTKHDF][POINTDATA]:
+        return get_point_dataset(h5_file, var)
+    elif var in h5_file[VTKHDF][CELLDATA]:
+        return get_cell_dataset(h5_file, var)
+    elif var in h5_file[VTKHDF][FIELDDATA]:
+        return get_field_dataset(h5_file, var)
+    else:
+        raise KeyError(f"Key {var} is not found.")
 
 def get_point_dataset(h5_file:h5py.File, var:str) -> h5py.Dataset:
     """
@@ -141,6 +153,24 @@ def get_cell_dataset(h5_file:h5py.File, var:str) -> h5py.Dataset:
         ImageData cell dataset
     """
     return h5_file[VTKHDF][CELLDATA][var]
+
+def get_field_dataset(h5_file:h5py.File, key:str):
+    """
+    Get field dataset from VTK HDF file.
+
+    Parameters
+    ----------
+    h5_file : h5py.File
+        opened VTK HDF file to read
+    var : str
+        Variable to return. Variable must be field data
+
+    Returns
+    -------
+    h5py.Dataset
+        ImageData field dataset
+    """    
+    return h5_file[VTKHDF][FIELDDATA][key]
 
 def read_slice(dset:h5py.Dataset, index:int,
                f_contiguous:bool=True) -> np.ndarray:
@@ -197,6 +227,7 @@ def initialize(file:h5py.File, extent:tuple, origin:tuple=(0,0,0),
     vtkhdf_group.attrs.create(DIRECTION, direction)
     vtkhdf_group.create_group(POINTDATA)
     vtkhdf_group.create_group(CELLDATA)
+    vtkhdf_group.create_group(FIELDDATA)
 
 def create_point_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
     """
@@ -310,6 +341,30 @@ def get_cell_data_shape(h5_file:h5py.File):
     """
     return iu.point2cell_dimension(get_point_data_shape(h5_file))
 
+def create_field_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
+    """
+    Create ImageData FieldData in HDF format. Data arrays (not scalars)
+    must be passed in with the `data` keyword argument.
+
+    If the field data is a string type, it MUST be a byte string, not
+    numpy bytes string. Using np.string_() doesn't fly with Paraview,
+    use encode() instead (nuance with `numpy.bytes_` vs `bytes` type).
+
+    Parameters
+    ----------
+    h5_file : h5py.File
+        VTK HDF file, opened for write
+    var : str
+        variable name for field dataset
+
+    Returns
+    -------
+    h5py.Dataset
+        Field dataset
+    """
+    group = h5_file[VTKHDF][FIELDDATA]
+    return group.create_dataset(var, **kwargs)
+
 def write_slice(dset:h5py.Dataset, array:np.ndarray, index:int):
     """
     Write array slice to file.
@@ -347,19 +402,29 @@ def write_vtkhdf(h5_file:h5py.File, imagedata,
     """    
     if isinstance(imagedata, vtk.vtkImageData):
         imagedata:pyvista.ImageData = pyvista.wrap(imagedata)
+
     initialize(h5_file, imagedata.extent, origin=imagedata.origin,
                spacing=imagedata.spacing, direction=direction)
-    for var in imagedata.array_names:
-        if var in imagedata.point_data.keys():
-            dset = create_point_dataset(h5_file, var, **kwargs)
-            nslices = imagedata.dimensions[2]
-            arr = get_point_array(imagedata, var)
-        elif var in imagedata.cell_data.keys():
-            dset = create_cell_dataset(h5_file, var, **kwargs)
-            arr = get_cell_array(imagedata, var)
-            nslices = iu.point2cell_dimension(imagedata.dimensions)[2]
+    
+    _write_slice = lambda dset, arr, i: write_slice(dset, arr[:,:,i], i)
+    
+    for var in imagedata.point_data.keys():
+        dset = create_point_dataset(h5_file, var, **kwargs)
+        nslices = imagedata.dimensions[2]
+        arr = get_point_array(imagedata, var)
         for i in range(nslices):
-            write_slice(dset, arr[:,:,i], i)
+            _write_slice(dset, arr, i)
+
+    for var in imagedata.cell_data.keys():
+        dset = create_cell_dataset(h5_file, var, **kwargs)
+        arr = get_cell_array(imagedata, var)
+        nslices = iu.point2cell_dimension(imagedata.dimensions)[2]
+        for i in range(nslices):
+            _write_slice(dset, arr, i)
+
+    for var in imagedata.field_data.keys():
+        fdat = get_field_array(imagedata, var)
+        create_field_dataset(h5_file, var, data=fdat, **kwargs)
 
 def dimensions2extent(dimensions:tuple):
     """
@@ -481,3 +546,30 @@ def get_cell_array(image_data:pyvista.ImageData, var:str):
     """    
     return image_data.cell_data[var].reshape(extent2cellshape(image_data.extent),
                                              order="F")
+
+def get_field_array(image_data:pyvista.ImageData, var:str):
+    """
+    Convenience function to get field dataset
+    from an ImageData object.
+    
+    Handles converting fixed string array of pyvista (numpy bytes) to bytes 
+    object for variable length strings that Paraview seems to require.
+
+    Parameters
+    ----------
+    image_data : pyvista.ImageData
+        ImageData object
+    var : str
+        variable name
+
+    Returns
+    -------
+    Any
+        Array or list of FieldData
+    """    
+    arr = image_data.field_data[var]
+    if not isinstance(arr[0], str):
+        return arr
+    else:
+        # using numpy.string_ here fails in Paraview
+        return [v.encode("utf-8") for v in arr]

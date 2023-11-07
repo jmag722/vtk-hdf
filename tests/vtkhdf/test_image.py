@@ -8,6 +8,8 @@ import vtkhdf.image_utils as iu
 PVAR1 = "pointvar1" # dummy point variable
 PVAR2 = "pointvar2"
 CVAR1 = "cellvar1" # dummy cell variable
+FVAR1 = "fieldvar1" # dummy field variable
+FVAR2 = "fieldvar2"
 DUMMY_IMAGE = "mybox-vti.hdf"
 
 @pytest.fixture
@@ -33,6 +35,8 @@ def radial_box():
         v5i.set_point_array(box, data, PVAR1)
         v5i.set_point_array(box, data2, PVAR2)
         box.cell_data[CVAR1] = data_c
+        box.field_data[FVAR1] = [129]
+        box.field_data[FVAR2] = ["/path/to/01-03-2023/directory"]
         return box
     return _method
 
@@ -71,6 +75,8 @@ def test_read_slice(tmp_path, write_dummy_image):
             elif var in box.cell_data:
                 arr = v5i.get_cell_array(box, var)
                 shape = iu.point2cell_dimension(box.dimensions)
+            elif var in box.field_data:
+                continue
             for i in range(shape[2]):
                 slice = v5i.read_slice(dset, i)
                 assert slice.flags.f_contiguous
@@ -89,6 +95,8 @@ def test_read_slice_c(tmp_path, write_dummy_image):
             elif var in box.cell_data:
                 arr = v5i.get_cell_array(box, var)
                 shape = iu.point2cell_dimension(box.dimensions)
+            elif var in box.field_data:
+                continue
             arr = v5i.f2c_reshape(arr)
             for i in range(shape[2]):
                 slice = v5i.read_slice(dset, i, False)
@@ -122,7 +130,31 @@ def test_initialize(tmp_path):
                             direction)
     assert bool(h5_file[v5i.VTKHDF][v5i.POINTDATA])
     assert bool(h5_file[v5i.VTKHDF][v5i.CELLDATA])
+    assert bool(h5_file[v5i.VTKHDF][v5i.FIELDDATA])
     h5_file.close()
+
+def test_create_field_dataset(tmp_path):
+    h5_file = h5py.File(tmp_path/"foo.hdf", "w")
+    dim = (11,23,15)
+    v5i.initialize(h5_file, v5i.dimensions2extent(dim))
+    v5i.create_field_dataset(h5_file, var=FVAR1, data=[-131.55])
+    v5i.create_field_dataset(h5_file, var=FVAR2, data=[b"hey you"])
+    v5i.create_field_dataset(h5_file, var="nothing", shape=(3,))
+    assert bool(h5_file[v5i.VTKHDF][v5i.FIELDDATA][FVAR1])
+    assert bool(h5_file[v5i.VTKHDF][v5i.FIELDDATA][FVAR2])
+    assert bool(h5_file[v5i.VTKHDF][v5i.FIELDDATA]["nothing"])
+    h5_file.close()
+
+def test_get_field_dataset(tmp_path, write_dummy_image):
+    box = write_dummy_image()
+    with h5py.File(tmp_path/DUMMY_IMAGE, "r") as f:
+        for var in box.field_data.keys():
+            dset = v5i.get_field_dataset(f, var)
+            if isinstance(dset[0], bytes):
+                for i,v in enumerate(dset):
+                    assert v.decode() == box.field_data[var][i]
+            else:
+                np.testing.assert_equal(dset, box.field_data[var])
 
 def test_create_point_dataset(tmp_path):
     h5_file = h5py.File(tmp_path/"foo.hdf", "w")
@@ -218,6 +250,14 @@ def test_write_cell_slice(tmp_path, radial_box):
             slice = v5i.read_slice(dset, i)
             assert slice.shape == dim_cell[:-1]
             np.testing.assert_allclose(slice, v5i.get_cell_array(box, CVAR1)[:,:,i])
+
+def test_get_field_array(radial_box):
+    box = radial_box()
+    fdat1 = v5i.get_field_array(box, FVAR1)
+    fdat2 = v5i.get_field_array(box, FVAR2)
+    np.testing.assert_equal(fdat1, box.field_data[FVAR1])
+    assert type(fdat2[0]) == bytes
+    assert fdat2 == [box.field_data[FVAR2][0].encode()]
 
 def test_dimensions2extent():
     assert v5i.dimensions2extent((1,2,3)) == (0,0,0,1,0,2)
