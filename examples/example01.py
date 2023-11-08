@@ -21,10 +21,10 @@ def example01():
     with h5py.File("myimage.hdf", "w") as f:
         v5i.write_vtkhdf(f, box)
     mesh = pyvista.wrap(v5i.read_vtkhdf("myimage.hdf"))
-    assert np.allclose(
+    np.testing.assert_allclose(
         v5i.get_point_array(mesh, "data"),
         v5i.get_point_array(box, "data")
     )
 
 if __name__ == "__main__":
-    example01()
+    mesh, box = example01()
