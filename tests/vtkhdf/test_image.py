@@ -16,7 +16,7 @@ def radial_box():
     def _method():
         dimensions = np.array([151, 91, 113])
         spacing = np.array([.01, .011, .03])
-        origin = v5i.origin_of_centered_image(dimensions, spacing, True)
+        origin = v5i.origin_of_centered_image(dimensions, spacing, 2)
         box = pyvista.ImageData(
             dimensions=dimensions,
             spacing=spacing,
@@ -297,15 +297,18 @@ def test_axis_length():
 def test_origin_of_centered_image():
     dim = (15,16,17)
     spacing = (1,1,3)
-    actual = v5i.origin_of_centered_image(dim, spacing, True)
-    expected = np.array([-7,-7.5,0])
-    np.testing.assert_equal(actual, expected)
-    actual = v5i.origin_of_centered_image(dim, spacing, False)
-    expected = np.array([-7,-7.5,-24])
-    np.testing.assert_equal(actual, expected)
-    actual = v5i.origin_of_centered_image(5, 2, True)
-    expected = np.array([-4])
-    np.testing.assert_equal(actual, expected)
+    actual = v5i.origin_of_centered_image(dim, spacing, 2)
+    assert actual == (-7,-7.5,0)
+    actual = v5i.origin_of_centered_image(dim, spacing, 0)
+    assert actual == (0,-7.5,-24)
+    actual = v5i.origin_of_centered_image(dim, spacing)
+    assert actual == (-7,-7.5,-24)
+    actual = v5i.origin_of_centered_image((5,), (2,))
+    assert actual == (-4,)
+    actual = v5i.origin_of_centered_image((5,), (2,), 0)
+    assert actual == (0,)
+    with pytest.raises(KeyError):
+        v5i.origin_of_centered_image((3,5), (2,4), 2)
 
 def test_get_point_axis():
     np.testing.assert_equal(v5i.get_point_axis(5,1,0),

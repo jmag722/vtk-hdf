@@ -7,7 +7,7 @@ import vtkhdf.image as v5i
 def example01():
     dimensions = (91, 51, 121)
     spacing = (.01, .013, .03)
-    origin = v5i.origin_of_centered_image(dimensions, spacing, True)
+    origin = v5i.origin_of_centered_image(dimensions, spacing, 2)
     box = pyvista.ImageData(
         dimensions=dimensions,
         spacing=spacing,

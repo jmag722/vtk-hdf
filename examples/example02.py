@@ -5,7 +5,7 @@ import vtkhdf.image as v5i
 
 dimensions = (1200, 1501, 653) # 9.4 GB per 64-bit dataset!
 spacing = (1e-3, 2e-3, 5e-4)
-origin = v5i.origin_of_centered_image(dimensions, spacing, True)
+origin = v5i.origin_of_centered_image(dimensions, spacing, 2)
 
 x,y,z = v5i.get_point_axes(dimensions, spacing, origin)
 

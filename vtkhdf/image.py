@@ -628,12 +628,11 @@ def get_field_array(image_data:pyvista.ImageData, var:str):
         return [v.encode("utf-8") for v in arr]
 
 def origin_of_centered_image(dimensions:tuple, spacing:tuple,
-                             zero_last_axis:bool=False) -> np.ndarray:
+                             zero_axis:int=None) -> tuple:
     """
     Obtain the origin for ImageData point data assuming
-    (0,0,0) is located at the ImageData centroid. Axis 2 (typically "z")
-    is centered at the middle of the axis, but can also be centered at the
-    first image plane of axis 2.
+    (0,0,0) is located at the ImageData centroid. Any axis can be centered
+    at the bottom plane (`zero_axis=...`) rather than the middle of the axis.
 
     Parameters
     ----------
@@ -641,19 +640,22 @@ def origin_of_centered_image(dimensions:tuple, spacing:tuple,
         Number of points in each dimension
     spacing : tuple
         Spacing in each dimension
-    zero_last_axis : bool, optional
-        Whether axis 2 should be centered at the bottom plane or center,
-            by default False (center of axis 2).
+    zero_axis : int, optional
+        Center this axis at the bottom image plane rather than at the 
+        middle of the axis, by default None (all axes centered at middle plane).
 
     Returns
     -------
-    np.ndarray
-        Origin of ImageData for (0,0,0) to be centered
+    tuple
+        Origin of ImageData for (0,0,0) to be at the ImageData centroid
     """    
     origin = -0.5*axis_length(np.array(dimensions), np.array(spacing))
-    if zero_last_axis and origin.size == 3:
-        origin[2] = 0.0
-    return origin
+    if zero_axis is not None:
+        if zero_axis >= origin.size:
+            raise KeyError(f"Origin array of size {origin.size}"
+                           f" cannot be indexed at {zero_axis}.")
+        origin[zero_axis] = 0.0
+    return tuple(origin)
 
 def axis_length(dimensions:int, spacing:float) -> float:
     """
