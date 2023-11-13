@@ -3,7 +3,6 @@ import numpy as np
 import pyvista
 import h5py
 import vtkhdf.image as v5i
-import vtkhdf.image_utils as iu
 
 PVAR1 = "pointvar1" # dummy point variable
 PVAR2 = "pointvar2"
@@ -17,13 +16,13 @@ def radial_box():
     def _method():
         dimensions = np.array([151, 91, 113])
         spacing = np.array([.01, .011, .03])
-        origin = iu.origin_of_centered_image(dimensions, spacing)
+        origin = v5i.origin_of_centered_image(dimensions, spacing, True)
         box = pyvista.ImageData(
             dimensions=dimensions,
             spacing=spacing,
             origin=origin
         )
-        X,Y,_ = iu.mesh_axes(*iu.get_point_axes(box.dimensions, box.spacing,
+        X,Y,_ = v5i.mesh_axes(*v5i.get_point_axes(box.dimensions, box.spacing,
                                                 box.origin))
         data = np.sqrt(X*X+Y*Y)
         data2 = X+45
@@ -74,7 +73,7 @@ def test_read_slice(tmp_path, write_dummy_image):
                 shape = box.dimensions
             elif var in box.cell_data:
                 arr = v5i.get_cell_array(box, var)
-                shape = iu.point2cell_dimension(box.dimensions)
+                shape = v5i.point2cell_dimensions(box.dimensions)
             elif var in box.field_data:
                 continue
             for i in range(shape[2]):
@@ -94,7 +93,7 @@ def test_read_slice_c(tmp_path, write_dummy_image):
                 shape = box.dimensions
             elif var in box.cell_data:
                 arr = v5i.get_cell_array(box, var)
-                shape = iu.point2cell_dimension(box.dimensions)
+                shape = v5i.point2cell_dimensions(box.dimensions)
             elif var in box.field_data:
                 continue
             arr = v5i.f2c_reshape(arr)
@@ -230,7 +229,7 @@ def test_write_cell_slice(tmp_path, radial_box):
     box = radial_box()
     arr = v5i.get_cell_array(box, CVAR1)
     arr2 = v5i.get_point_array(box, PVAR2)
-    cc_shape = iu.point2cell_dimension(box.dimensions)
+    cc_shape = v5i.point2cell_dimensions(box.dimensions)
     box.save(tmp_path/"hey.vti")
     with h5py.File(tmp_path/DUMMY_IMAGE, "w") as h5_file:
         v5i.initialize(h5_file, box.extent)
@@ -268,6 +267,84 @@ def test_extent2dimensions():
     assert v5i.extent2dimensions((0,5,0,3,0,4)) == (6,4,5)
     assert v5i.extent2dimensions((0,15,0,1,0,0,0,3)) == (16,2,1,4)
 
-def test_extent2cellshape():
-    assert v5i.extent2cellshape((0,1,0,11,0,0)) == (1,11,1)
-    assert v5i.extent2cellshape((1,3,2,11,1,0)) == (2,9,1)
+def test_point2cell_dimensions():
+    assert v5i.point2cell_dimensions([5]) == (4,)
+    assert v5i.point2cell_dimensions([1]) == (1,)
+    assert v5i.point2cell_dimensions([1,2,3]) == (1,1,2)
+
+def test_point2cell_extent():
+    assert v5i.point2cell_extent([0,1,0,0,1,6]) == (0,0,0,0,1,5)
+    assert v5i.point2cell_extent([0,1,0,11,0,0]) == (0,0,0,10,0,0)
+    assert v5i.point2cell_extent((1,3,2,11,0,0)) == (1,2,2,10,0,0)
+
+def test_point2cell_origin():
+    assert v5i.point2cell_origin((5,), (3,), (0.1,)) == (1.6,)
+    assert v5i.point2cell_origin((1,), (4,), (0,)) == (0,)
+    assert v5i.point2cell_origin((15,1,7), (1,1,.3), (0,1,0)) == (0.5, 1, 0.15)
+
+def test_axis_length():
+    d = 5
+    s = .25
+    assert v5i.axis_length(d,s) == 1
+    d = (1,2,3)
+    s = (0.1, 1, 4)
+    actual = [v5i.axis_length(d,s) for d,s in zip(d,s)]
+    expected = [0., 1., 8.]
+    assert actual == expected
+    np.testing.assert_allclose(v5i.axis_length(np.array(d), np.array(s)),
+                               np.array(expected))
+
+def test_origin_of_centered_image():
+    dim = (15,16,17)
+    spacing = (1,1,3)
+    actual = v5i.origin_of_centered_image(dim, spacing, True)
+    expected = np.array([-7,-7.5,0])
+    np.testing.assert_equal(actual, expected)
+    actual = v5i.origin_of_centered_image(dim, spacing, False)
+    expected = np.array([-7,-7.5,-24])
+    np.testing.assert_equal(actual, expected)
+    actual = v5i.origin_of_centered_image(5, 2, True)
+    expected = np.array([-4])
+    np.testing.assert_equal(actual, expected)
+
+def test_get_point_axis():
+    np.testing.assert_equal(v5i.get_point_axis(5,1,0),
+                            np.array([0, 1, 2, 3, 4]))
+    np.testing.assert_allclose(v5i.get_point_axis(4,.1,-.5),
+                               np.array([-.5, -.4, -.3, -.2]))
+    np.testing.assert_allclose(v5i.get_point_axis(1,.1,-.5),
+                               np.array([-0.5]))
+    
+def test_get_cell_axis():
+    np.testing.assert_equal(v5i.get_cell_axis(5,1,0),
+                            np.array([0.5, 1.5, 2.5, 3.5]))
+    np.testing.assert_allclose(v5i.get_cell_axis(4,.1,-.5),
+                               np.array([-.45, -.35, -.25]))
+    np.testing.assert_allclose(v5i.get_cell_axis(1,.1,-.5),
+                               np.array([-0.5]))
+
+def test_get_point_axes():
+    dim = (5,4,3)
+    s = (1,2,4)
+    o = (0, 1, .3)
+    x,y,z = v5i.get_point_axes(dim, s, o)
+    np.testing.assert_allclose(x, np.array([0, 1, 2, 3, 4]))
+    np.testing.assert_allclose(y, np.array([1, 3, 5, 7]))
+    np.testing.assert_allclose(z, np.array([.3, 4.3, 8.3]))
+    
+    dim = (5,4,1)
+    x,y,z = v5i.get_point_axes(dim, s, o)
+    np.testing.assert_allclose(z, np.array([.3]))
+
+def test_get_cell_axes():
+    dim = (5,4,3)
+    s = (1,2,4)
+    o = (0, 1, .3)
+    x,y,z = v5i.get_cell_axes(dim, s, o)
+    np.testing.assert_allclose(x, np.array([.5, 1.5, 2.5, 3.5]))
+    np.testing.assert_allclose(y, np.array([2, 4, 6]))
+    np.testing.assert_allclose(z, np.array([2.3, 6.3]))
+    
+    dim = (5,4,1)
+    x,y,z = v5i.get_cell_axes(dim, s, o)
+    np.testing.assert_allclose(z, np.array([.3]))

@@ -2,20 +2,19 @@ import h5py
 import numpy as np
 import pyvista
 
-import vtkhdf.image_utils as iu
 import vtkhdf.image as v5i
 
 def example01():
     dimensions = (91, 51, 121)
     spacing = (.01, .013, .03)
-    origin = iu.origin_of_centered_image(dimensions, spacing)
+    origin = v5i.origin_of_centered_image(dimensions, spacing, True)
     box = pyvista.ImageData(
         dimensions=dimensions,
         spacing=spacing,
         origin=origin
     )
     # dataset small enough that we can get away with meshgrid
-    X,Y,_ = iu.mesh_axes(*iu.get_point_axes(box.dimensions, box.spacing, box.origin))
+    X,Y,_ = v5i.mesh_axes(*v5i.get_point_axes(box.dimensions, box.spacing, box.origin))
     data = X*X+Y*Y
     v5i.set_point_array(box, data, "data")
     with h5py.File("myimage.hdf", "w") as f:
@@ -27,4 +26,4 @@ def example01():
     )
 
 if __name__ == "__main__":
-    mesh, box = example01()
+    example01()

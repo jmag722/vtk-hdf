@@ -11,12 +11,11 @@ VTK HDF format is relatively new, and will require a recent vtk library to suppo
 In the most trivial case, assume you have an ImageData object (vtk.ImageData or pyvista.ImageData) that you'd like to write to HDF5. Such an object could be initialized as:
 ```python
 ...
-import vtkhdf.image_utils as iu
 import vtkhdf.image as v5i
 
 dimensions = (91, 51, 121)
 spacing = (.01, .013, .03)
-origin = iu.origin_of_centered_image(dimensions, spacing)
+origin = v5i.origin_of_centered_image(dimensions, spacing, True)
 box = pyvista.ImageData(
     dimensions=dimensions,
     spacing=spacing,
@@ -26,7 +25,7 @@ box = pyvista.ImageData(
 We now have an ImageData object, but it's empty. Let's assign a dataset to it:
 ```python
 # dataset small enough that we can get away with meshgrid
-X,Y,_ = iu.mesh_axes(*iu.get_point_axes(box.dimensions, box.spacing, box.origin))
+X,Y,_ = v5i.mesh_axes(*v5i.get_point_axes(box.dimensions, box.spacing, box.origin))
 data = X*X+Y*Y # positionally-dependent array data
 v5i.set_point_array(box, data, "data")
 ```
@@ -45,13 +44,12 @@ mesh = v5i.read_vtkhdf("myimage.hdf")
 Let's assume we'll be working with a much larger ImageData set.
 ```python
 ...
-import vtkhdf.image_utils as iu
 import vtkhdf.image as v5i
 
 dimensions = (1200, 1501, 653) # 9.4 GB per 64-bit dataset!
 spacing = (1e-3, 2e-3, 5e-4)
-origin = iu.origin_of_centered_image(dimensions, spacing)
-x,y,z = iu.get_point_axes(dimensions, spacing, origin)
+origin = v5i.origin_of_centered_image(dimensions, spacing, True)
+x,y,z = v5i.get_point_axes(dimensions, spacing, origin)
 ```
 While many modern machines could hold this contiguous dataset in memory, often we don't need to and it will make our program more memory-efficient if we don't. Instead, we will initialize and save this ImageData slice-by-slice.
 
@@ -71,7 +69,7 @@ As VTK uses column-major ordering (often called Fortran ordering), the data will
         slice = np.sqrt(x[:, np.newaxis]**2 + y**2, order="F")
         v5i.write_slice(dset, slice, k)
 ```
-**Note**: If the user was working with C-order numpy arrays, the dimensions, origin, and spacing input to `v5i.initialize` must be reversed. No modification needs to be made to the C-arrays themselves: `v5i.write_slice` handles transposing of the data when needed. Slices read via `v5i.read_slice` can be output in F or C-order according to the user's needs.
+**Note**: If the user was working with C-order numpy arrays, the dimensions, origin, and spacing input to `v5i.initialize` must be reversed from that of the C-order arrays. No modification needs to be made to the C-arrays themselves: `v5i.write_slice` handles transposing of the data when needed. Slices read via `v5i.read_slice` can be output in F or C-order according to the user's needs.
 
 Now that we've written to this large file, we can access it later by slice as needed (or all at once if possible).
 ```python

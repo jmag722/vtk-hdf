@@ -1,11 +1,8 @@
 import h5py
 import numpy as np
 from numpy.typing import ArrayLike
-from collections.abc import Sequence
 import pyvista
 import vtk
-
-import vtkhdf.image_utils as iu
 
 """
 Python interface for VTK HDF ImageData format.
@@ -13,10 +10,12 @@ Python interface for VTK HDF ImageData format.
 References & Examples Used:
 https://vtk.org/doc/nightly/html/VTKHDFFileFormat.html
 https://docs.vtk.org/en/latest/design_documents/VTKFileFormats.html#hdf-file-formats
-VTK Issue #18956 and its discourse at 
+
+Kolluru, Chaitanya. VTK Issue #18956 and its subsequent discussion.
     https://discourse.vtk.org/t/working-with-a-hdf-file-in-vtk/11233
-    was helpful in setting up a working case.
-https://www.kitware.com/developing-hdf5-readers-using-vtkpythonalgorithm/
+
+Geveci, Berk. "Developing HDF5 readers using vtkPythonAlgorithm". 
+    https://www.kitware.com/developing-hdf5-readers-using-vtkpythonalgorithm/
 """
 
 VTKHDF = "VTKHDF"
@@ -32,57 +31,231 @@ SPACING = "Spacing"
 DIRECTION = "Direction"
 SCALARS = "Scalars"
 
-def read_vtkhdf(filename:str):
+def initialize(file:h5py.File, extent:tuple, origin:tuple=(0,0,0),
+               spacing:tuple=(1,1,1),
+               direction:tuple=(1, 0, 0, 0, 1, 0, 0, 0, 1)):
     """
-    Wrapper for reading VTK HDF file format. Currently, the vtk.vtkHDFReader
-    does not support LZF compressed datasets (GZIP does work).
+    Initialize a VTK HDF file group with correct attributes.
 
     Parameters
     ----------
-    filename : str
-        VTK HDF filename.
-
-    Returns
-    -------
-    vtk.vtkImageData
-        ImageData output
+    file : h5py.File
+        VTK HDF file
+    extent : tuple
+        Extent of ImageData
+    origin : tuple, optional
+        Origin of ImageData, by default (0,0,0)
+    spacing : tuple, optional
+        Spacing of ImageData, by default (1,1,1)
+    direction : tuple, optional
+        Direction of ImageData axes, by default (1, 0, 0, 0, 1, 0, 0, 0, 1)
     """    
-    reader = vtk.vtkHDFReader()
-    reader.SetFileName(filename)
-    reader.Update()
-    return reader.GetOutput()
+    group = file.create_group(VTKHDF)
+    group.attrs.create(VERSION, [1, 0])
+    group.attrs.create(TYPE, np.string_(IMAGEDATA))
+    group.attrs.create(EXTENT, extent)
+    group.attrs.create(ORIGIN, origin)
+    group.attrs.create(SPACING, spacing)
+    group.attrs.create(DIRECTION, direction)
+    group.create_group(POINTDATA)
+    group.create_group(CELLDATA)
+    group.create_group(FIELDDATA)
 
-def c2f_reshape(array:ArrayLike) -> np.ndarray:
+def read_slice(dset:h5py.Dataset, index:int,
+               f_contiguous:bool=True) -> np.ndarray:
     """
-    Convert a row-major (C) array to column-major (Fortran).
+    Read 2D ImageData slice from VTK HDF dataset. Slices are taken on the 
+    last index of the corresponding column-major (F) ordered dataset.
+
+    By default, slices are output in Fortran order to match 
+    ImageData storage.
 
     Parameters
     ----------
-    array : ArrayLike
-        C-order array
+    dset : h5py.Dataset
+        Dataset to read slice from (point or cell data)
+    index : int
+        Index of the last axis (2, typically "z") to extract from ImageData.
+    f_contiguous : bool
+        Whether to return slice in Fortran or C, order,
+        by default True (Fortran)  
 
     Returns
     -------
     np.ndarray
-        Transposed array in Fortran order
-    """    
-    return np.asfortranarray(np.transpose(array))
-
-def f2c_reshape(array:ArrayLike) -> np.ndarray:
+        2D (last index squeezed) ImageData slice
     """
-    Convert a column-major (Fortran) array to row-major (C).
+    dat = dset[index, :, :]
+    return c2f_reshape(dat) if f_contiguous else dat
+
+def write_slice(dset:h5py.Dataset, array:np.ndarray, index:int):
+    """
+    Write array slice to file.
 
     Parameters
     ----------
-    array : ArrayLike
-        Fortran-order array
+    file : h5py.Dataset
+        VTK HDF dataset (point or cell data)
+    array : np.ndarray
+        2D array to write to file, in either C or F-order
+    index : int
+        Slice index corresponding to the last axis of the ImageData dataset
+    """    
+    # paraview will be transposing it to read
+    arr_c = f2c_reshape(array) if array.flags.f_contiguous else array
+    dset[index,:,:] = arr_c[np.newaxis,:,:]
+
+def create_point_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
+    """
+    Create HDF5 point dataset within file. Data is chunked by
+    the slowest-changing/last index in the Fortran array.
+
+    Paraview (as of 5.11.2) and vtk.vtkHDFReader do not currently support LZF
+    compression, but GZIP is supported.
+
+    Parameters
+    ----------
+    h5_file : h5py.File
+        opened VTK HDF file for read
+    var : str
+        Point dataset variable name
 
     Returns
     -------
-    np.ndarray
-        Transposed array in C order
+    h5py.Dataset
+        Point dataset
+    """    
+    group = h5_file[VTKHDF][POINTDATA]
+    shape_c = get_point_data_shape(h5_file)
+    return _create_dataset(group, shape=shape_c, var=var, **kwargs)
+
+def create_cell_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
     """
-    return np.ascontiguousarray(np.transpose(array))
+    Create HDF5 cell dataset within file. Data is chunked by
+    the slowest-changing/last index in the Fortran array.
+
+    Paraview (as of 5.11.2) and vtk.vtkHDFReader do not currently support LZF
+    compression, but GZIP is supported.
+
+    Parameters
+    ----------
+    h5_file : h5py.File
+        opened VTK HDF file to read
+    var : str
+        Cell dataset variable to initialize
+
+    Returns
+    -------
+    h5py.Dataset
+        Cell dataset
+    """    
+    group = h5_file[VTKHDF][CELLDATA]
+    shape_c = get_cell_data_shape(h5_file)
+    return _create_dataset(group, shape=shape_c, var=var, **kwargs)
+
+def create_field_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
+    """
+    Create ImageData FieldData in HDF format. Data arrays (not scalars)
+    must be passed in with the `data` keyword argument.
+
+    If the field data is a string type, it MUST be a byte string, not
+    numpy bytes string. Using np.string_() doesn't fly with Paraview,
+    use encode() instead (nuance with `numpy.bytes_` vs `bytes` type).
+
+    Parameters
+    ----------
+    h5_file : h5py.File
+        VTK HDF file, opened for write
+    var : str
+        variable name for field dataset
+
+    Returns
+    -------
+    h5py.Dataset
+        Field dataset
+    """
+    group = h5_file[VTKHDF][FIELDDATA]
+    return group.create_dataset(var, **kwargs)
+    
+def _create_dataset(group:h5py.Group, shape:tuple, var:str, **kwargs) -> h5py.Dataset:
+    """
+    Create point or cell dataset with chunks based on the shape.
+
+    Parameters
+    ----------
+    group : h5py.Group
+        Point or cell data group
+    shape : tuple
+        shape of point or cell data
+    var : str
+        variable name
+
+    Returns
+    -------
+    h5py.Dataset
+        dataset created
+    """    
+    chunk_shape = get_chunk_shape(shape)
+    group.attrs.create(SCALARS, np.string_(var))   
+    return group.create_dataset(
+        var, shape=shape, chunks=chunk_shape, **kwargs
+    )
+
+def get_point_data_shape(h5_file:h5py.File) -> tuple:
+    """
+    Get the shape of the point dataset as it will be written to HDF.
+    Note that this is the reverse of what is given by WholeExtent, because
+    Paraview expects the array to be in C-order.
+
+    Parameters
+    ----------
+    h5_file : h5py.File
+        open VTK HDF file for read
+
+    Returns
+    -------
+    tuple
+        shape of point dataset as it will be written to file
+    """    
+    # reverse what is given in WholeExtent so paraview can read
+    return extent2dimensions(h5_file[VTKHDF].attrs[EXTENT])[::-1]
+
+def get_cell_data_shape(h5_file:h5py.File):
+    """
+    Get the shape of the cell dataset as it will be written to HDF.
+    Note that this is the reverse of what is given by WholeExtent
+    (and decremented by one for cell data), because Paraview expects
+    the array to be in C-order.
+
+    Parameters
+    ----------
+    h5_file : h5py.File
+        open VTK HDF file for read
+
+    Returns
+    -------
+    tuple
+        shape of point dataset as it will be written to file
+    """
+    return point2cell_dimensions(get_point_data_shape(h5_file))
+
+def get_chunk_shape(shape_c:tuple) -> tuple:
+    """
+    Get the chunk shape for the point or cell array data as it
+    is written to the HDF5 file (C-order). This means that the last or sliced
+    index (axis 2 in Fortran-order) is now the first index in the HDF file.
+
+    Parameters
+    ----------
+    shape_c : tuple
+        Shape of point or cell dataset, in transposed C-order
+
+    Returns
+    -------
+    tuple
+        chunk shape for given dataset shape
+    """
+    return (1, *shape_c[1:])
 
 def get_dataset(h5_file:h5py.File, var:str) -> h5py.Dataset:
     """
@@ -154,7 +327,7 @@ def get_cell_dataset(h5_file:h5py.File, var:str) -> h5py.Dataset:
     """
     return h5_file[VTKHDF][CELLDATA][var]
 
-def get_field_dataset(h5_file:h5py.File, key:str):
+def get_field_dataset(h5_file:h5py.File, var:str):
     """
     Get field dataset from VTK HDF file.
 
@@ -170,217 +343,27 @@ def get_field_dataset(h5_file:h5py.File, key:str):
     h5py.Dataset
         ImageData field dataset
     """    
-    return h5_file[VTKHDF][FIELDDATA][key]
+    return h5_file[VTKHDF][FIELDDATA][var]
 
-def read_slice(dset:h5py.Dataset, index:int,
-               f_contiguous:bool=True) -> np.ndarray:
+def read_vtkhdf(filename:str):
     """
-    Read 2D ImageData slice from VTK HDF dataset. Slices are taken on the 
-    last index of the corresponding column-major (F) ordered dataset.
-
-    By default, slices are output in Fortran order to match 
-    ImageData storage.
+    Wrapper for reading VTK HDF file format. Currently, the vtk.vtkHDFReader
+    does not support LZF compressed datasets (GZIP does work).
 
     Parameters
     ----------
-    dset : h5py.Dataset
-        Dataset to read slice from (point or cell data)
-    index : int
-        Index of the last axis (2, typically "z") to extract from ImageData.
-    f_contiguous : bool
-        Whether to return slice in Fortran or C, order,
-        by default True (Fortran)  
+    filename : str
+        VTK HDF filename.
 
     Returns
     -------
-    np.ndarray
-        2D (last index squeezed) ImageData slice
-    """
-    dat = dset[index, :, :]
-    return c2f_reshape(dat) if f_contiguous else dat
-
-def initialize(file:h5py.File, extent:tuple, origin:tuple=(0,0,0),
-               spacing:tuple=(1,1,1),
-               direction:tuple=(1, 0, 0, 0, 1, 0, 0, 0, 1)):
-    """
-    Initialize a VTK HDF file group with correct attributes.
-
-    Parameters
-    ----------
-    file : h5py.File
-        VTK HDF file
-    extent : tuple
-        Extent of ImageData
-    origin : tuple, optional
-        Origin of ImageData, by default (0,0,0)
-    spacing : tuple, optional
-        Spacing of ImageData, by default (1,1,1)
-    direction : tuple, optional
-        Direction of ImageData axes, by default (1, 0, 0, 0, 1, 0, 0, 0, 1)
+    vtk.vtkImageData
+        ImageData output
     """    
-    vtkhdf_group = file.create_group(VTKHDF)
-    vtkhdf_group.attrs.create(VERSION, [1, 0])
-    vtkhdf_group.attrs.create(TYPE, np.string_(IMAGEDATA))
-    vtkhdf_group.attrs.create(EXTENT, extent)
-    vtkhdf_group.attrs.create(ORIGIN, origin)
-    vtkhdf_group.attrs.create(SPACING, spacing)
-    vtkhdf_group.attrs.create(DIRECTION, direction)
-    vtkhdf_group.create_group(POINTDATA)
-    vtkhdf_group.create_group(CELLDATA)
-    vtkhdf_group.create_group(FIELDDATA)
-
-def create_point_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
-    """
-    Create HDF5 point dataset within file. Data is chunked by
-    the slowest-changing/last index in the Fortran array.
-
-    Paraview (as of 5.11.2) and vtk.vtkHDFReader do not currently support LZF
-    compression, but GZIP is supported.
-
-    Parameters
-    ----------
-    h5_file : h5py.File
-        opened VTK HDF file for read
-    var : str
-        Point dataset variable name
-
-    Returns
-    -------
-    h5py.Dataset
-        Point dataset
-    """    
-    group = h5_file[VTKHDF][POINTDATA]
-    shape_c = get_point_data_shape(h5_file)
-    chunk_shape = get_chunk_shape(shape_c)
-    group.attrs.create(SCALARS, np.string_(var))   
-    return group.create_dataset(
-        var, shape=shape_c, chunks=chunk_shape, **kwargs
-    )
-
-def get_point_data_shape(h5_file:h5py.File) -> tuple:
-    """
-    Get the shape of the point dataset as it will be written to HDF.
-    Note that this is the reverse of what is given by WholeExtent, because
-    Paraview expects the array to be in C-order.
-
-    Parameters
-    ----------
-    h5_file : h5py.File
-        open VTK HDF file for read
-
-    Returns
-    -------
-    tuple
-        shape of point dataset as it will be written to file
-    """    
-    # reverse what is given in WholeExtent so paraview can read
-    return extent2dimensions(h5_file[VTKHDF].attrs[EXTENT])[::-1]
-
-def get_chunk_shape(shape_c:tuple) -> tuple:
-    """
-    Get the chunk shape for the point or cell array data as it
-    is written to the HDF5 file (C-order). This means that the last or sliced
-    index (axis 2 in Fortran-order) is now the first index here.
-
-    Parameters
-    ----------
-    shape_c : tuple
-        Shape of point or cell dataset, in transposed C-order
-
-    Returns
-    -------
-    tuple
-        chunk shape for given dataset shape
-    """
-    return (1, *shape_c[1:])
-
-def create_cell_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
-    """
-    Create HDF5 cell dataset within file. Data is chunked by
-    the slowest-changing/last index in the Fortran array.
-
-    Paraview (as of 5.11.2) and vtk.vtkHDFReader do not currently support LZF
-    compression, but GZIP is supported.
-
-    Parameters
-    ----------
-    h5_file : h5py.File
-        opened VTK HDF file to read
-    var : str
-        Cell dataset variable to initialize
-
-    Returns
-    -------
-    h5py.Dataset
-        Cell dataset
-    """    
-    group = h5_file[VTKHDF][CELLDATA]
-    shape_c = get_cell_data_shape(h5_file)
-    chunk_shape = get_chunk_shape(shape_c)
-    group.attrs.create(SCALARS, np.string_(var))   
-    return group.create_dataset(
-        var, shape=shape_c, chunks=chunk_shape, **kwargs
-    )
-
-def get_cell_data_shape(h5_file:h5py.File):
-    """
-    Get the shape of the cell dataset as it will be written to HDF.
-    Note that this is the reverse of what is given by WholeExtent
-    (and decremented by one for cell data), because Paraview expects
-    the array to be in C-order.
-
-    Parameters
-    ----------
-    h5_file : h5py.File
-        open VTK HDF file for read
-
-    Returns
-    -------
-    tuple
-        shape of point dataset as it will be written to file
-    """
-    return iu.point2cell_dimension(get_point_data_shape(h5_file))
-
-def create_field_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
-    """
-    Create ImageData FieldData in HDF format. Data arrays (not scalars)
-    must be passed in with the `data` keyword argument.
-
-    If the field data is a string type, it MUST be a byte string, not
-    numpy bytes string. Using np.string_() doesn't fly with Paraview,
-    use encode() instead (nuance with `numpy.bytes_` vs `bytes` type).
-
-    Parameters
-    ----------
-    h5_file : h5py.File
-        VTK HDF file, opened for write
-    var : str
-        variable name for field dataset
-
-    Returns
-    -------
-    h5py.Dataset
-        Field dataset
-    """
-    group = h5_file[VTKHDF][FIELDDATA]
-    return group.create_dataset(var, **kwargs)
-
-def write_slice(dset:h5py.Dataset, array:np.ndarray, index:int):
-    """
-    Write array slice to file.
-
-    Parameters
-    ----------
-    file : h5py.Dataset
-        VTK HDF dataset (point or cell data)
-    array : np.ndarray
-        2D array to write to file, in either C or F-order
-    index : int
-        Slice index corresponding to the last axis of the ImageData dataset
-    """    
-    # paraview will be transposing it to read
-    arr_c = f2c_reshape(array) if array.flags.f_contiguous else array
-    dset[index,:,:] = arr_c[np.newaxis,:,:]
+    reader = vtk.vtkHDFReader()
+    reader.SetFileName(filename)
+    reader.Update()
+    return reader.GetOutput()
 
 def write_vtkhdf(h5_file:h5py.File, imagedata,
                  direction=(1, 0, 0, 0, 1, 0, 0, 0, 1),
@@ -418,7 +401,7 @@ def write_vtkhdf(h5_file:h5py.File, imagedata,
     for var in imagedata.cell_data.keys():
         dset = create_cell_dataset(h5_file, var, **kwargs)
         arr = get_cell_array(imagedata, var)
-        nslices = iu.point2cell_dimension(imagedata.dimensions)[2]
+        nslices = point2cell_dimensions(imagedata.dimensions)[2]
         for i in range(nslices):
             _write_slice(dset, arr, i)
 
@@ -426,6 +409,92 @@ def write_vtkhdf(h5_file:h5py.File, imagedata,
         fdat = get_field_array(imagedata, var)
         create_field_dataset(h5_file, var, data=fdat, **kwargs)
 
+def c2f_reshape(array:ArrayLike) -> np.ndarray:
+    """
+    Reshapes a row-major (C) array to column-major (Fortran).
+
+    Parameters
+    ----------
+    array : ArrayLike
+        C-order array
+
+    Returns
+    -------
+    np.ndarray
+        Transposed array in Fortran order
+    """    
+    return np.asfortranarray(np.transpose(array))
+
+def f2c_reshape(array:ArrayLike) -> np.ndarray:
+    """
+    Reshapes a column-major (Fortran) array to row-major (C).
+
+    Parameters
+    ----------
+    array : ArrayLike
+        Fortran-order array
+
+    Returns
+    -------
+    np.ndarray
+        Transposed array in C order
+    """
+    return np.ascontiguousarray(np.transpose(array))
+
+def point2cell_dimensions(dimensions:tuple) -> tuple:
+    """
+    Get the number of cell centers for point dimensions
+
+    Parameters
+    ----------
+    dimensions : tuple
+        point dimensions
+
+    Returns
+    -------
+    tuple
+        number of cell centers in each axis
+    """    
+    return tuple([d-1 if d>1 else d for d in dimensions])
+
+def point2cell_extent(extent:tuple) -> tuple:
+    """
+    Get the extent of the cell centered data from point extent
+
+    Parameters
+    ----------
+    extent : tuple
+        point extent
+
+    Returns
+    -------
+    tuple
+        extent of cell center indices in each axis
+    """    
+    return tuple([x for (lb, ub) in zip(extent[0::2], extent[1::2])
+                  for x in (lb, ub-1 if ub>0 else ub)])
+
+def point2cell_origin(dimension:tuple, spacing:tuple, origin:tuple) -> tuple:
+    """
+    Get the position of the first cell center along an ImageData axis
+
+    Parameters
+    ----------
+    dimension : tuple[int,...]
+        ImageData dimension
+    spacing : tuple[float,...]
+        ImageData spacing
+    origin : tuple[float,...]
+        ImageData origin
+
+    Returns
+    -------
+    tuple[float,...]
+        cell center position
+    """    
+    return tuple([o+0.5*s if d>1 else o
+                  for (d,s,o) in zip(dimension, spacing, origin)])
+    
 def dimensions2extent(dimensions:tuple):
     """
     Get ImageData extent from given dimensions.
@@ -440,7 +509,7 @@ def dimensions2extent(dimensions:tuple):
     tuple
         Array extents
     """    
-    return tuple(x for v in dimensions for x in (0,v-1))
+    return tuple(x for v in dimensions for x in (0, v-1))
 
 def extent2dimensions(extent:tuple):
     """
@@ -456,25 +525,7 @@ def extent2dimensions(extent:tuple):
     tuple
         Dimensions of array or ImageData point data
     """    
-    return tuple(ub-lb+1 for (lb, ub) in list(zip(extent[0::2], extent[1::2])))
-
-def extent2cellshape(extent:tuple):
-    """
-    Get the dimensional shape of the cell data from the 
-    corresponding ImageData extent (which is the extent of point datasets)
-
-    Parameters
-    ----------
-    extent : tuple
-        Extent of ImageData
-
-    Returns
-    -------
-    tuple
-        Dimensions of ImageData cell data
-    """    
-    return tuple(ub-lb if ub-lb > 0 else 1
-                 for (lb, ub) in list(zip(extent[0::2], extent[1::2])))
+    return tuple(ub-lb+1 for (lb, ub) in zip(extent[0::2], extent[1::2]))
 
 def set_point_array(image_data:pyvista.ImageData, array:np.ndarray, var:str):
     """
@@ -486,7 +537,8 @@ def set_point_array(image_data:pyvista.ImageData, array:np.ndarray, var:str):
     image_data : pyvista.ImageData
         ImageData
     array : np.ndarray
-        3D array to assign as ImageData point dataset
+        3D array to assign as ImageData point dataset. Will be 
+        flattened in F-order.
     var : str
         New point dataset variable name
     """    
@@ -502,7 +554,8 @@ def set_cell_array(image_data:pyvista.ImageData, array:np.ndarray, var:str):
     image_data : pyvista.ImageData
         ImageData
     array : np.ndarray
-        3D array to assign as ImageData cell dataset
+        3D array to assign as ImageData cell dataset. Will be 
+        flattened in F-order.
     var : str
         New cell dataset variable name
     """    
@@ -543,9 +596,9 @@ def get_cell_array(image_data:pyvista.ImageData, var:str):
     -------
     np.ndarray
         Entire cell dataset from ImageData
-    """    
-    return image_data.cell_data[var].reshape(extent2cellshape(image_data.extent),
-                                             order="F")
+    """
+    cell_dims = extent2dimensions(point2cell_extent(image_data.extent))    
+    return image_data.cell_data[var].reshape(cell_dims, order="F")
 
 def get_field_array(image_data:pyvista.ImageData, var:str):
     """
@@ -573,3 +626,176 @@ def get_field_array(image_data:pyvista.ImageData, var:str):
     else:
         # using numpy.string_ here fails in Paraview
         return [v.encode("utf-8") for v in arr]
+
+def origin_of_centered_image(dimensions:tuple, spacing:tuple,
+                             zero_last_axis:bool=False) -> np.ndarray:
+    """
+    Obtain the origin for ImageData point data assuming
+    (0,0,0) is located at the ImageData centroid. Axis 2 (typically "z")
+    is centered at the middle of the axis, but can also be centered at the
+    first image plane of axis 2.
+
+    Parameters
+    ----------
+    dimensions : tuple
+        Number of points in each dimension
+    spacing : tuple
+        Spacing in each dimension
+    zero_last_axis : bool, optional
+        Whether axis 2 should be centered at the bottom plane or center,
+            by default False (center of axis 2).
+
+    Returns
+    -------
+    np.ndarray
+        Origin of ImageData for (0,0,0) to be centered
+    """    
+    origin = -0.5*axis_length(np.array(dimensions), np.array(spacing))
+    if zero_last_axis and origin.size == 3:
+        origin[2] = 0.0
+    return origin
+
+def axis_length(dimensions:int, spacing:float) -> float:
+    """
+    Length of a 1D array from its dimension and constant spacing.
+
+    Parameters
+    ----------
+    dimensions : int
+        Array dimension
+    spacing : float
+        Array spacing
+
+    Returns
+    -------
+    float
+        Array length in every dimension
+    """
+    return (dimensions-1)*spacing
+
+def get_point_axis(dimension:int, spacing:float, origin:float) -> np.ndarray:
+    """
+    Get 1D constant spacing of points for the dimensions, spacing,
+    and origin of an ImageData axis.
+
+    Parameters
+    ----------
+    dimension : int
+        ImageData dimension
+    spacing : float
+        ImageData spacing
+    origin : float
+        ImageData origin
+
+    Returns
+    -------
+    np.ndarray
+        ImageData point positions
+    """
+    return _get_axis(dimension, spacing, origin)
+
+def get_cell_axis(dimension:int, spacing:float, origin:float) -> np.ndarray:
+    """
+    Get 1D constant spacing of cell centers for the dimensions, spacing,
+    and origin of an ImageData axis.
+
+    Parameters
+    ----------
+    dimension : int
+        ImageData dimension
+    spacing : float
+        ImageData spacing
+    origin : float
+        ImageData origin
+
+    Returns
+    -------
+    np.ndarray
+        cell center position array
+    """    
+    return _get_axis(point2cell_dimensions([dimension])[0], spacing,
+                     point2cell_origin([dimension], [spacing], [origin])[0])
+
+def _get_axis(npts:int, spacing:float, offset:float) -> np.ndarray:
+    """
+    Get position of points along axis.
+
+    Parameters
+    ----------
+    npts : int
+        Number of points
+    spacing : float
+        Spacing between points
+    offset : float
+        Starting value of array of points
+
+    Returns
+    -------
+    np.ndarray
+        Array of positional points for the given dimension.
+    """    
+    return np.linspace(offset,
+                       offset + axis_length(npts, spacing),
+                       npts,
+                       endpoint=True)
+
+def get_point_axes(dimensions:tuple, spacing:tuple, origin:tuple):
+    """
+    Get one-dimensional axes for each dimension. Can be handy
+    when creating datasets in ImageData based upon position.
+
+    Parameters
+    ----------
+    dimensions : tuple
+        Number of points in each dimension
+    spacing : tuple
+        Spacing in each dimension
+    origin : tuple
+        Origin in each dimension
+
+    Returns
+    -------
+    tuple
+        One-dimensional axes arrays for each dimension
+    """    
+    return tuple([get_point_axis(d, s, o)
+                  for d,s,o in zip(dimensions, spacing, origin)])
+
+def get_cell_axes(dimensions:tuple, spacing:tuple, origin:tuple):
+    """
+    Get one-dimensional cell axes for each dimension. Can be handy
+    when creating cell datasets in ImageData based upon position.
+
+    Parameters
+    ----------
+    dimensions : tuple
+        Number of points in each dimension
+    spacing : tuple
+        Spacing in each dimension
+    origin : tuple
+        Origin in each dimension
+
+    Returns
+    -------
+    tuple
+        One-dimensional axes arrays for each dimension
+    """    
+    return tuple([get_cell_axis(d, s, o)
+                  for d,s,o in zip(dimensions, spacing, origin)])
+
+def mesh_axes(*xi:ArrayLike, indexing:str="ij", **kwargs):
+    """
+    Convenient wrapper for np.meshgrid() with indexing
+    set to "ij".
+
+    Parameters
+    ----------
+    xi : ArrayLike
+        1D arrays
+
+    Returns
+    -------
+    np.ndarray
+        *xi as meshgrid
+    """    
+    return np.meshgrid(*xi, indexing=indexing, **kwargs)

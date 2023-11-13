@@ -1,14 +1,13 @@
 import h5py
 import numpy as np
 
-import vtkhdf.image_utils as iu
 import vtkhdf.image as v5i
 
 dimensions = (1200, 1501, 653) # 9.4 GB per 64-bit dataset!
 spacing = (1e-3, 2e-3, 5e-4)
-origin = iu.origin_of_centered_image(dimensions, spacing)
+origin = v5i.origin_of_centered_image(dimensions, spacing, True)
 
-x,y,z = iu.get_point_axes(dimensions, spacing, origin)
+x,y,z = v5i.get_point_axes(dimensions, spacing, origin)
 
 cache_slice_nbytes = dimensions[0] * dimensions[1] * 8
 with h5py.File("mybigimage.hdf", "w", rdcc_nbytes=cache_slice_nbytes) as f:
