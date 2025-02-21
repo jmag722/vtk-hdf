@@ -118,7 +118,7 @@ def test_initialize(tmp_path):
     np.testing.assert_equal(h5_file.get(v5i.VTKHDF).attrs[v5i.VERSION],
                             np.array([1,0]))
     np.testing.assert_equal(h5_file.get(v5i.VTKHDF).attrs[v5i.TYPE],
-                            np.string_(v5i.IMAGEDATA))
+                            np.bytes_(v5i.IMAGEDATA))
     np.testing.assert_equal(h5_file.get(v5i.VTKHDF).attrs[v5i.EXTENT],
                             extent)
     np.testing.assert_equal(h5_file.get(v5i.VTKHDF).attrs[v5i.ORIGIN],
@@ -161,7 +161,7 @@ def test_create_point_dataset(tmp_path):
     v5i.initialize(h5_file, v5i.dimensions2extent(dim))
     v5i.create_point_dataset(h5_file, PVAR1, compression="lzf")
     assert bool(h5_file[v5i.VTKHDF][v5i.POINTDATA][PVAR1])
-    assert h5_file[v5i.VTKHDF][v5i.POINTDATA].attrs[v5i.SCALARS] == np.string_(PVAR1)
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA].attrs[v5i.SCALARS] == np.bytes_(PVAR1)
     assert h5_file[v5i.VTKHDF][v5i.POINTDATA][PVAR1].shape == (15,23,11)
     assert h5_file[v5i.VTKHDF][v5i.POINTDATA][PVAR1].chunks == (1,23,11)
     h5_file.close()
@@ -172,7 +172,7 @@ def test_create_cell_dataset(tmp_path):
     v5i.initialize(h5_file, v5i.dimensions2extent(dim))
     v5i.create_cell_dataset(h5_file, CVAR1, compression="lzf")
     assert bool(h5_file[v5i.VTKHDF][v5i.CELLDATA][CVAR1])
-    assert h5_file[v5i.VTKHDF][v5i.CELLDATA].attrs[v5i.SCALARS] == np.string_(CVAR1)
+    assert h5_file[v5i.VTKHDF][v5i.CELLDATA].attrs[v5i.SCALARS] == np.bytes_(CVAR1)
     assert h5_file[v5i.VTKHDF][v5i.CELLDATA][CVAR1].shape == (14,22,10)
     assert h5_file[v5i.VTKHDF][v5i.CELLDATA][CVAR1].chunks == (1,22,10)
 
@@ -182,7 +182,7 @@ def test_create_point_dataset_c(tmp_path):
     v5i.initialize(h5_file, v5i.dimensions2extent(dim_c[::-1]))
     v5i.create_point_dataset(h5_file, PVAR1)
     assert bool(h5_file[v5i.VTKHDF][v5i.POINTDATA][PVAR1])
-    assert h5_file[v5i.VTKHDF][v5i.POINTDATA].attrs[v5i.SCALARS] == np.string_(PVAR1)
+    assert h5_file[v5i.VTKHDF][v5i.POINTDATA].attrs[v5i.SCALARS] == np.bytes_(PVAR1)
     assert h5_file[v5i.VTKHDF][v5i.POINTDATA][PVAR1].shape == dim_c
     assert h5_file[v5i.VTKHDF][v5i.POINTDATA][PVAR1].chunks == (1,23,15)
     h5_file.close()
@@ -240,7 +240,7 @@ def test_write_cell_slice(tmp_path, radial_box):
         dset2 = v5i.create_point_dataset(h5_file, PVAR2)
         for i in range(box.dimensions[2]):
             v5i.write_slice(dset2, arr2[:,:,i], i)
-        
+
 
     with h5py.File(tmp_path/DUMMY_IMAGE, "r") as h5_file:
         dset = v5i.get_dataset(h5_file, CVAR1)
@@ -317,7 +317,7 @@ def test_get_point_axis():
                                np.array([-.5, -.4, -.3, -.2]))
     np.testing.assert_allclose(v5i.get_point_axis(1,.1,-.5),
                                np.array([-0.5]))
-    
+
 def test_get_cell_axis():
     np.testing.assert_equal(v5i.get_cell_axis(5,1,0),
                             np.array([0.5, 1.5, 2.5, 3.5]))
@@ -334,7 +334,7 @@ def test_get_point_axes():
     np.testing.assert_allclose(x, np.array([0, 1, 2, 3, 4]))
     np.testing.assert_allclose(y, np.array([1, 3, 5, 7]))
     np.testing.assert_allclose(z, np.array([.3, 4.3, 8.3]))
-    
+
     dim = (5,4,1)
     x,y,z = v5i.get_point_axes(dim, s, o)
     np.testing.assert_allclose(z, np.array([.3]))
@@ -347,7 +347,7 @@ def test_get_cell_axes():
     np.testing.assert_allclose(x, np.array([.5, 1.5, 2.5, 3.5]))
     np.testing.assert_allclose(y, np.array([2, 4, 6]))
     np.testing.assert_allclose(z, np.array([2.3, 6.3]))
-    
+
     dim = (5,4,1)
     x,y,z = v5i.get_cell_axes(dim, s, o)
     np.testing.assert_allclose(z, np.array([.3]))
