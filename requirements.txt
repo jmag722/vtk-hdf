@@ -1,4 +1,5 @@
 h5py
 numpy
 pyvista>=0.40.0
+pytest
 vtk>=9.1.0
