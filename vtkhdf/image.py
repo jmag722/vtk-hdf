@@ -177,7 +177,8 @@ def create_field_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
     group = h5_file[VTKHDF][FIELDDATA]
     return group.create_dataset(var, **kwargs)
 
-def _create_dataset(group:h5py.Group, shape:tuple, var:str, **kwargs) -> h5py.Dataset:
+def _create_dataset(group:h5py.Group, shape:tuple, var:str, dtype=np.float64,
+                    **kwargs) -> h5py.Dataset:
     """
     Create point or cell dataset with chunks based on the shape.
 
@@ -189,6 +190,8 @@ def _create_dataset(group:h5py.Group, shape:tuple, var:str, **kwargs) -> h5py.Da
         shape of point or cell data
     var : str
         variable name
+    dtype : str | np.dtype
+        Data type for the dataset. Defaults to np.float64.
 
     Returns
     -------
@@ -198,7 +201,7 @@ def _create_dataset(group:h5py.Group, shape:tuple, var:str, **kwargs) -> h5py.Da
     chunk_shape = get_chunk_shape(shape)
     group.attrs.create(SCALARS, np.bytes_(var))
     return group.create_dataset(
-        var, shape=shape, chunks=chunk_shape, **kwargs
+        var, shape=shape, dtype=dtype, chunks=chunk_shape, **kwargs
     )
 
 def get_point_data_shape(h5_file:h5py.File) -> tuple:
