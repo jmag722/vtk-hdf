@@ -4,17 +4,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vtk-hdf"
-version = "0.1.0"
-authors = [
-    {name = "Jared Magnusson", email = "jmag722@gmail.com"},
-]
+version = "0.2.0"
+authors = [{ name = "Jared Magnusson", email = "jmag722@gmail.com" }]
 description = "Python wrapper library for the new VTK HDF format."
 readme = "README.md"
 requires-python = ">=3.9"
-license = {file = "LICENSE"}
+license = { file = "LICENSE" }
 keywords = [
-    "vtk-hdf", "python", "pyvista", "vtk", "hdf5", "h5py",
-    "visualization", "wrapper", "vtkhdf"
+    "vtk-hdf",
+    "python",
+    "pyvista",
+    "vtk",
+    "hdf5",
+    "h5py",
+    "visualization",
+    "wrapper",
+    "vtkhdf",
 ]
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
@@ -23,16 +28,12 @@ classifiers = [
 
 dynamic = ["dependencies"]
 [tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
-optional-dependencies = {dev = { file = ["requirements-dev.txt"] }}
+dependencies = { file = ["requirements.txt"] }
+optional-dependencies = { dev = { file = ["requirements-dev.txt"] } }
 
 [tool.pytest.ini_options]
-addopts = [
-    "--import-mode=importlib",
-]
-pythonpath = [
-  "."
-]
+addopts = ["--import-mode=importlib"]
+pythonpath = ["."]
 
 [project.urls]
 "Homepage" = "https://github.com/jmag722/vtk-hdf"
