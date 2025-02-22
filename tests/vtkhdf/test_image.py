@@ -9,7 +9,7 @@ PVAR2 = "pointvar2"
 CVAR1 = "cellvar1" # dummy cell variable
 FVAR1 = "fieldvar1" # dummy field variable
 FVAR2 = "fieldvar2"
-DUMMY_IMAGE = "mybox-vti.hdf"
+DUMMY_IMAGE = f"mybox-vti{v5i.EXTENSION}"
 
 @pytest.fixture
 def radial_box():
@@ -107,7 +107,7 @@ def test_read_slice_c(tmp_path, write_dummy_image):
                 )
 
 def test_initialize(tmp_path):
-    h5_file = h5py.File(tmp_path/"foo.hdf", "w")
+    h5_file = h5py.File(tmp_path/"foo{v5i.EXTENSION}", "w")
     extent = (0,10,0,11,0,13)
     origin = (.1,.1,0)
     spacing = (1,2,4)
@@ -133,7 +133,7 @@ def test_initialize(tmp_path):
     h5_file.close()
 
 def test_create_field_dataset(tmp_path):
-    h5_file = h5py.File(tmp_path/"foo.hdf", "w")
+    h5_file = h5py.File(tmp_path/f"foo{v5i.EXTENSION}", "w")
     dim = (11,23,15)
     v5i.initialize(h5_file, v5i.dimensions2extent(dim))
     v5i.create_field_dataset(h5_file, var=FVAR1, data=[-131.55])
@@ -156,7 +156,7 @@ def test_get_field_dataset(tmp_path, write_dummy_image):
                 np.testing.assert_equal(dset, box.field_data[var])
 
 def test_create_point_dataset(tmp_path):
-    h5_file = h5py.File(tmp_path/"foo.hdf", "w")
+    h5_file = h5py.File(tmp_path/f"foo{v5i.EXTENSION}", "w")
     dim = (11,23,15)
     v5i.initialize(h5_file, v5i.dimensions2extent(dim))
     v5i.create_point_dataset(h5_file, PVAR1, compression="lzf")
@@ -167,7 +167,7 @@ def test_create_point_dataset(tmp_path):
     h5_file.close()
 
 def test_create_cell_dataset(tmp_path):
-    h5_file = h5py.File(tmp_path/"foo.hdf", "w")
+    h5_file = h5py.File(tmp_path/f"foo{v5i.EXTENSION}", "w")
     dim = (11,23,15)
     v5i.initialize(h5_file, v5i.dimensions2extent(dim))
     v5i.create_cell_dataset(h5_file, CVAR1, compression="lzf")
@@ -177,7 +177,7 @@ def test_create_cell_dataset(tmp_path):
     assert h5_file[v5i.VTKHDF][v5i.CELLDATA][CVAR1].chunks == (1,22,10)
 
 def test_create_point_dataset_c(tmp_path):
-    h5_file = h5py.File(tmp_path/"foo_c.hdf", "w")
+    h5_file = h5py.File(tmp_path/f"foo_c{v5i.EXTENSION}", "w")
     dim_c = (11,23,15)
     v5i.initialize(h5_file, v5i.dimensions2extent(dim_c[::-1]))
     v5i.create_point_dataset(h5_file, PVAR1)

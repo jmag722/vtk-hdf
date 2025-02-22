@@ -30,6 +30,7 @@ ORIGIN = "Origin"
 SPACING = "Spacing"
 DIRECTION = "Direction"
 SCALARS = "Scalars"
+EXTENSION = ".vtkhdf"
 
 def initialize(file:h5py.File, extent:tuple, origin:tuple=(0,0,0),
                spacing:tuple=(1,1,1),

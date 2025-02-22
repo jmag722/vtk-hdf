@@ -32,13 +32,13 @@ v5i.set_point_array(box, data, "data")
 This instance could easily be saved using `pyvista.DataObject.save`, but we can also
 write the data in HDF5 format.
 ```python
-with h5py.File("myimage.hdf", "w") as f:
+with h5py.File("myimage.vtkhdf", "w") as f:
     v5i.write_vtkhdf(f, box)
 ```
 We can verify that our data was saved correctly by reading it back for comparison
 or viewing it in Paraview.
 ```python
-mesh = v5i.read_vtkhdf("myimage.hdf")
+mesh = v5i.read_vtkhdf("myimage.vtkhdf")
 ```
 ### Example 2: Writing large datasets by slice
 Let's assume we'll be working with a much larger ImageData set.
@@ -56,7 +56,7 @@ While many modern machines could hold this contiguous dataset in memory, often w
 We'll open an HDF file for writing and set a cache size equal to a single slice that we'll be working with. Then we'll initialize the file to hold the 3D ImageData, though we haven't created it yet:
 ```python
 cache_slice_nbytes = dimensions[0] * dimensions[1] * 8
-with h5py.File("mybigimage.hdf", "w", rdcc_nbytes=cache_slice_nbytes) as f:
+with h5py.File("mybigimage.vtkhdf", "w", rdcc_nbytes=cache_slice_nbytes) as f:
     v5i.initialize(f, v5i.dimensions2extent(dimensions),
                    origin=origin, spacing=spacing)
     dset = v5i.create_point_dataset(f, "data")
@@ -73,7 +73,7 @@ As VTK uses column-major ordering (often called Fortran ordering), the data will
 
 Now that we've written to this large file, we can access it later by slice as needed (or all at once if possible).
 ```python
-with h5py.File("mybigimage.hdf", "r", rdcc_nbytes=cache_slice_nbytes) as f:
+with h5py.File("mybigimage.vtkhdf", "r", rdcc_nbytes=cache_slice_nbytes) as f:
     dset = v5i.get_point_dataset(f, "data")
     slice = v5i.read_slice(dset, 42)
     assert np.allclose(slice, np.sqrt(x[:, np.newaxis]**2 + y**2, order="F"))

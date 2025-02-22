@@ -17,9 +17,10 @@ def example01():
     X,Y,_ = v5i.mesh_axes(*v5i.get_point_axes(box.dimensions, box.spacing, box.origin))
     data = X*X+Y*Y
     v5i.set_point_array(box, data, "data")
-    with h5py.File("myimage.hdf", "w") as f:
+    filename = f"myimage{v5i.EXTENSION}"
+    with h5py.File(filename, "w") as f:
         v5i.write_vtkhdf(f, box)
-    mesh = pyvista.wrap(v5i.read_vtkhdf("myimage.hdf"))
+    mesh = pyvista.wrap(v5i.read_vtkhdf(filename))
     np.testing.assert_allclose(
         v5i.get_point_array(mesh, "data"),
         v5i.get_point_array(box, "data")
