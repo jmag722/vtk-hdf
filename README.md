@@ -80,3 +80,9 @@ with h5py.File("mybigimage.hdf", "r", rdcc_nbytes=cache_slice_nbytes) as f:
 ```
 
 Full examples can be found [here](./examples/).
+
+## Further Reading
+
+- [VTK File Formats](https://docs.vtk.org/en/latest/design_documents/VTKFileFormats.html#vtkhdf-file-format)
+- [vtkHDFReader Class Reference](https://vtk.org/doc/nightly/html/classvtkHDFReader.html)
+- [vtkHDFWriter Class Reference](https://vtk.org/doc/nightly/html/classvtkHDFWriter.html)
