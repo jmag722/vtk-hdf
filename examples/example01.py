@@ -4,6 +4,7 @@ import pyvista
 
 import vtkhdf.image as v5i
 
+
 def example01():
     dimensions = (91, 51, 121)
     spacing = (.01, .013, .03)
@@ -14,7 +15,8 @@ def example01():
         origin=origin
     )
     # dataset small enough that we can get away with meshgrid
-    X,Y,_ = v5i.mesh_axes(*v5i.get_point_axes(box.dimensions, box.spacing, box.origin))
+    X, Y, _ = v5i.mesh_axes(
+        *v5i.get_point_axes(box.dimensions, box.spacing, box.origin))
     data = X*X+Y*Y
     v5i.set_point_array(box, data, "data")
     filename = f"myimage{v5i.EXTENSION}"
@@ -25,6 +27,7 @@ def example01():
         v5i.get_point_array(mesh, "data"),
         v5i.get_point_array(box, "data")
     )
+
 
 if __name__ == "__main__":
     example01()

@@ -32,9 +32,10 @@ DIRECTION = "Direction"
 SCALARS = "Scalars"
 EXTENSION = ".vtkhdf"
 
-def initialize(file:h5py.File, extent:tuple, origin:tuple=(0,0,0),
-               spacing:tuple=(1,1,1),
-               direction:tuple=(1, 0, 0, 0, 1, 0, 0, 0, 1)):
+
+def initialize(file: h5py.File, extent: tuple, origin: tuple = (0, 0, 0),
+               spacing: tuple = (1, 1, 1),
+               direction: tuple = (1, 0, 0, 0, 1, 0, 0, 0, 1)):
     """
     Initialize a VTK HDF file group with correct attributes.
 
@@ -62,8 +63,9 @@ def initialize(file:h5py.File, extent:tuple, origin:tuple=(0,0,0),
     group.create_group(CELLDATA)
     group.create_group(FIELDDATA)
 
-def read_slice(dset:h5py.Dataset, index:int,
-               f_contiguous:bool=True) -> np.ndarray:
+
+def read_slice(dset: h5py.Dataset, index: int,
+               f_contiguous: bool = True) -> np.ndarray:
     """
     Read 2D ImageData slice from VTK HDF dataset. Slices are taken on the
     last index of the corresponding column-major (F) ordered dataset.
@@ -89,7 +91,8 @@ def read_slice(dset:h5py.Dataset, index:int,
     dat = dset[index, :, :]
     return c2f_reshape(dat) if f_contiguous else dat
 
-def write_slice(dset:h5py.Dataset, array:np.ndarray, index:int):
+
+def write_slice(dset: h5py.Dataset, array: np.ndarray, index: int):
     """
     Write array slice to file.
 
@@ -104,9 +107,10 @@ def write_slice(dset:h5py.Dataset, array:np.ndarray, index:int):
     """
     # paraview will be transposing it to read
     arr_c = f2c_reshape(array) if array.flags.f_contiguous else array
-    dset[index,:,:] = arr_c[np.newaxis,:,:]
+    dset[index, :, :] = arr_c[np.newaxis, :, :]
 
-def create_point_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
+
+def create_point_dataset(h5_file: h5py.File, var: str, **kwargs) -> h5py.Dataset:
     """
     Create HDF5 point dataset within file. Data is chunked by
     the slowest-changing/last index in the Fortran array.
@@ -130,7 +134,8 @@ def create_point_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
     shape_c = get_point_data_shape(h5_file)
     return _create_dataset(group, shape=shape_c, var=var, **kwargs)
 
-def create_cell_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
+
+def create_cell_dataset(h5_file: h5py.File, var: str, **kwargs) -> h5py.Dataset:
     """
     Create HDF5 cell dataset within file. Data is chunked by
     the slowest-changing/last index in the Fortran array.
@@ -154,7 +159,8 @@ def create_cell_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
     shape_c = get_cell_data_shape(h5_file)
     return _create_dataset(group, shape=shape_c, var=var, **kwargs)
 
-def create_field_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
+
+def create_field_dataset(h5_file: h5py.File, var: str, **kwargs) -> h5py.Dataset:
     """
     Create ImageData FieldData in HDF format. Data arrays (not scalars)
     must be passed in with the `data` keyword argument.
@@ -178,7 +184,8 @@ def create_field_dataset(h5_file:h5py.File, var:str, **kwargs) -> h5py.Dataset:
     group = h5_file[VTKHDF][FIELDDATA]
     return group.create_dataset(var, **kwargs)
 
-def _create_dataset(group:h5py.Group, shape:tuple, var:str, dtype=np.float64,
+
+def _create_dataset(group: h5py.Group, shape: tuple, var: str, dtype=np.float64,
                     **kwargs) -> h5py.Dataset:
     """
     Create point or cell dataset with chunks based on the shape.
@@ -205,7 +212,8 @@ def _create_dataset(group:h5py.Group, shape:tuple, var:str, dtype=np.float64,
         var, shape=shape, dtype=dtype, chunks=chunk_shape, **kwargs
     )
 
-def get_point_data_shape(h5_file:h5py.File) -> tuple:
+
+def get_point_data_shape(h5_file: h5py.File) -> tuple:
     """
     Get the shape of the point dataset as it will be written to HDF.
     Note that this is the reverse of what is given by WholeExtent, because
@@ -224,7 +232,8 @@ def get_point_data_shape(h5_file:h5py.File) -> tuple:
     # reverse what is given in WholeExtent so paraview can read
     return extent2dimensions(h5_file[VTKHDF].attrs[EXTENT])[::-1]
 
-def get_cell_data_shape(h5_file:h5py.File):
+
+def get_cell_data_shape(h5_file: h5py.File):
     """
     Get the shape of the cell dataset as it will be written to HDF.
     Note that this is the reverse of what is given by WholeExtent
@@ -243,7 +252,8 @@ def get_cell_data_shape(h5_file:h5py.File):
     """
     return point2cell_dimensions(get_point_data_shape(h5_file))
 
-def get_chunk_shape(shape_c:tuple) -> tuple:
+
+def get_chunk_shape(shape_c: tuple) -> tuple:
     """
     Get the chunk shape for the point or cell array data as it
     is written to the HDF5 file (C-order). This means that the last or sliced
@@ -261,7 +271,8 @@ def get_chunk_shape(shape_c:tuple) -> tuple:
     """
     return (1, *shape_c[1:])
 
-def get_dataset(h5_file:h5py.File, var:str) -> h5py.Dataset:
+
+def get_dataset(h5_file: h5py.File, var: str) -> h5py.Dataset:
     """
     Get dataset from VTK HDF file, either point, cell, or field data.
     Note the data has NOT been transposed to Fortran order.
@@ -293,7 +304,8 @@ def get_dataset(h5_file:h5py.File, var:str) -> h5py.Dataset:
     else:
         raise KeyError(f"Key {var} is not found.")
 
-def get_point_dataset(h5_file:h5py.File, var:str) -> h5py.Dataset:
+
+def get_point_dataset(h5_file: h5py.File, var: str) -> h5py.Dataset:
     """
     Get point dataset from VTK HDF file. Note the data has NOT
     been transposed to Fortran order.
@@ -312,7 +324,8 @@ def get_point_dataset(h5_file:h5py.File, var:str) -> h5py.Dataset:
     """
     return h5_file[VTKHDF][POINTDATA][var]
 
-def get_cell_dataset(h5_file:h5py.File, var:str) -> h5py.Dataset:
+
+def get_cell_dataset(h5_file: h5py.File, var: str) -> h5py.Dataset:
     """
     Get cell dataset from VTK HDF file. Note the data has NOT
     been transposed to Fortran order.
@@ -331,7 +344,8 @@ def get_cell_dataset(h5_file:h5py.File, var:str) -> h5py.Dataset:
     """
     return h5_file[VTKHDF][CELLDATA][var]
 
-def get_field_dataset(h5_file:h5py.File, var:str):
+
+def get_field_dataset(h5_file: h5py.File, var: str):
     """
     Get field dataset from VTK HDF file.
 
@@ -349,7 +363,8 @@ def get_field_dataset(h5_file:h5py.File, var:str):
     """
     return h5_file[VTKHDF][FIELDDATA][var]
 
-def read_vtkhdf(filename:str):
+
+def read_vtkhdf(filename: str):
     """
     Wrapper for reading VTK HDF file format. Currently, the vtk.vtkHDFReader
     does not support LZF compressed datasets (GZIP does work).
@@ -369,7 +384,8 @@ def read_vtkhdf(filename:str):
     reader.Update()
     return reader.GetOutput()
 
-def write_vtkhdf(h5_file:h5py.File, imagedata,
+
+def write_vtkhdf(h5_file: h5py.File, imagedata,
                  direction=(1, 0, 0, 0, 1, 0, 0, 0, 1),
                  **kwargs):
     """
@@ -388,12 +404,12 @@ def write_vtkhdf(h5_file:h5py.File, imagedata,
         ImageData direction, by default (1, 0, 0, 0, 1, 0, 0, 0, 1)
     """
     if isinstance(imagedata, vtk.vtkImageData):
-        imagedata:pyvista.ImageData = pyvista.wrap(imagedata)
+        imagedata: pyvista.ImageData = pyvista.wrap(imagedata)
 
     initialize(h5_file, imagedata.extent, origin=imagedata.origin,
                spacing=imagedata.spacing, direction=direction)
 
-    _write_slice = lambda dset, arr, i: write_slice(dset, arr[:,:,i], i)
+    def _write_slice(dset, arr, i): return write_slice(dset, arr[:, :, i], i)
 
     for var in imagedata.point_data.keys():
         dset = create_point_dataset(h5_file, var, **kwargs)
@@ -413,7 +429,8 @@ def write_vtkhdf(h5_file:h5py.File, imagedata,
         fdat = get_field_array(imagedata, var)
         create_field_dataset(h5_file, var, data=fdat, **kwargs)
 
-def c2f_reshape(array:ArrayLike) -> np.ndarray:
+
+def c2f_reshape(array: ArrayLike) -> np.ndarray:
     """
     Reshapes a row-major (C) array to column-major (Fortran).
 
@@ -429,7 +446,8 @@ def c2f_reshape(array:ArrayLike) -> np.ndarray:
     """
     return np.asfortranarray(np.transpose(array))
 
-def f2c_reshape(array:ArrayLike) -> np.ndarray:
+
+def f2c_reshape(array: ArrayLike) -> np.ndarray:
     """
     Reshapes a column-major (Fortran) array to row-major (C).
 
@@ -445,7 +463,8 @@ def f2c_reshape(array:ArrayLike) -> np.ndarray:
     """
     return np.ascontiguousarray(np.transpose(array))
 
-def point2cell_dimensions(dimensions:tuple) -> tuple:
+
+def point2cell_dimensions(dimensions: tuple) -> tuple:
     """
     Get the number of cell centers for point dimensions
 
@@ -459,9 +478,10 @@ def point2cell_dimensions(dimensions:tuple) -> tuple:
     tuple
         number of cell centers in each axis
     """
-    return tuple([d-1 if d>1 else d for d in dimensions])
+    return tuple([d-1 if d > 1 else d for d in dimensions])
 
-def point2cell_extent(extent:tuple) -> tuple:
+
+def point2cell_extent(extent: tuple) -> tuple:
     """
     Get the extent of the cell centered data from point extent
 
@@ -476,9 +496,10 @@ def point2cell_extent(extent:tuple) -> tuple:
         extent of cell center indices in each axis
     """
     return tuple([x for (lb, ub) in zip(extent[0::2], extent[1::2])
-                  for x in (lb, ub-1 if ub>0 else ub)])
+                  for x in (lb, ub-1 if ub > 0 else ub)])
 
-def point2cell_origin(dimension:tuple, spacing:tuple, origin:tuple) -> tuple:
+
+def point2cell_origin(dimension: tuple, spacing: tuple, origin: tuple) -> tuple:
     """
     Get the position of the first cell center along an ImageData axis
 
@@ -496,10 +517,11 @@ def point2cell_origin(dimension:tuple, spacing:tuple, origin:tuple) -> tuple:
     tuple[float,...]
         cell center position
     """
-    return tuple([o+0.5*s if d>1 else o
-                  for (d,s,o) in zip(dimension, spacing, origin)])
+    return tuple([o+0.5*s if d > 1 else o
+                  for (d, s, o) in zip(dimension, spacing, origin)])
 
-def dimensions2extent(dimensions:tuple):
+
+def dimensions2extent(dimensions: tuple):
     """
     Get ImageData extent from given dimensions.
 
@@ -515,7 +537,8 @@ def dimensions2extent(dimensions:tuple):
     """
     return tuple(x for v in dimensions for x in (0, v-1))
 
-def extent2dimensions(extent:tuple):
+
+def extent2dimensions(extent: tuple):
     """
     Compute ImageData point dataset dimensions from ImageData extent.
 
@@ -531,7 +554,8 @@ def extent2dimensions(extent:tuple):
     """
     return tuple(ub-lb+1 for (lb, ub) in zip(extent[0::2], extent[1::2]))
 
-def set_point_array(image_data:pyvista.ImageData, array:np.ndarray, var:str):
+
+def set_point_array(image_data: pyvista.ImageData, array: np.ndarray, var: str):
     """
     Convenience function to write unflattened point dataset to an ImageData
     object. Handles conversion from column-major order.
@@ -548,7 +572,8 @@ def set_point_array(image_data:pyvista.ImageData, array:np.ndarray, var:str):
     """
     image_data.point_data[var] = array.flatten(order="F")
 
-def set_cell_array(image_data:pyvista.ImageData, array:np.ndarray, var:str):
+
+def set_cell_array(image_data: pyvista.ImageData, array: np.ndarray, var: str):
     """
     Convenience function to write unflattened point dataset to an ImageData
     object. Handles conversion from column-major order.
@@ -565,7 +590,8 @@ def set_cell_array(image_data:pyvista.ImageData, array:np.ndarray, var:str):
     """
     image_data.cell_data[var] = array.flatten(order="F")
 
-def get_point_array(image_data:pyvista.ImageData, var:str):
+
+def get_point_array(image_data: pyvista.ImageData, var: str):
     """
     Convenience function to get unflattened point dataset
     from an ImageData object. Handles converting to column-major order.
@@ -584,7 +610,8 @@ def get_point_array(image_data:pyvista.ImageData, var:str):
     """
     return image_data.point_data[var].reshape(image_data.dimensions, order="F")
 
-def get_cell_array(image_data:pyvista.ImageData, var:str):
+
+def get_cell_array(image_data: pyvista.ImageData, var: str):
     """
     Convenience function to get unflattened cell dataset
     from an ImageData object. Handles converting to column-major order.
@@ -604,7 +631,8 @@ def get_cell_array(image_data:pyvista.ImageData, var:str):
     cell_dims = extent2dimensions(point2cell_extent(image_data.extent))
     return image_data.cell_data[var].reshape(cell_dims, order="F")
 
-def get_field_array(image_data:pyvista.ImageData, var:str):
+
+def get_field_array(image_data: pyvista.ImageData, var: str):
     """
     Convenience function to get field dataset
     from an ImageData object.
@@ -631,8 +659,9 @@ def get_field_array(image_data:pyvista.ImageData, var:str):
         # using numpy.string_ here fails in Paraview
         return [v.encode("utf-8") for v in arr]
 
-def origin_of_centered_image(dimensions:tuple, spacing:tuple,
-                             zero_axis:int=None) -> tuple:
+
+def origin_of_centered_image(dimensions: tuple, spacing: tuple,
+                             zero_axis: int = None) -> tuple:
     """
     Obtain the origin for ImageData point data assuming
     (0,0,0) is located at the ImageData centroid. Any axis can be centered
@@ -661,7 +690,8 @@ def origin_of_centered_image(dimensions:tuple, spacing:tuple,
         origin[zero_axis] = 0.0
     return tuple(origin)
 
-def axis_length(dimensions:int, spacing:float) -> float:
+
+def axis_length(dimensions: int, spacing: float) -> float:
     """
     Length of a 1D array from its dimension and constant spacing.
 
@@ -679,7 +709,8 @@ def axis_length(dimensions:int, spacing:float) -> float:
     """
     return (dimensions-1)*spacing
 
-def get_point_axis(dimension:int, spacing:float, origin:float) -> np.ndarray:
+
+def get_point_axis(dimension: int, spacing: float, origin: float) -> np.ndarray:
     """
     Get 1D constant spacing of points for the dimensions, spacing,
     and origin of an ImageData axis.
@@ -700,7 +731,8 @@ def get_point_axis(dimension:int, spacing:float, origin:float) -> np.ndarray:
     """
     return _get_axis(dimension, spacing, origin)
 
-def get_cell_axis(dimension:int, spacing:float, origin:float) -> np.ndarray:
+
+def get_cell_axis(dimension: int, spacing: float, origin: float) -> np.ndarray:
     """
     Get 1D constant spacing of cell centers for the dimensions, spacing,
     and origin of an ImageData axis.
@@ -722,7 +754,8 @@ def get_cell_axis(dimension:int, spacing:float, origin:float) -> np.ndarray:
     return _get_axis(point2cell_dimensions([dimension])[0], spacing,
                      point2cell_origin([dimension], [spacing], [origin])[0])
 
-def _get_axis(npts:int, spacing:float, offset:float) -> np.ndarray:
+
+def _get_axis(npts: int, spacing: float, offset: float) -> np.ndarray:
     """
     Get position of points along axis.
 
@@ -745,7 +778,8 @@ def _get_axis(npts:int, spacing:float, offset:float) -> np.ndarray:
                        npts,
                        endpoint=True)
 
-def get_point_axes(dimensions:tuple, spacing:tuple, origin:tuple):
+
+def get_point_axes(dimensions: tuple, spacing: tuple, origin: tuple):
     """
     Get one-dimensional axes for each dimension. Can be handy
     when creating datasets in ImageData based upon position.
@@ -765,9 +799,10 @@ def get_point_axes(dimensions:tuple, spacing:tuple, origin:tuple):
         One-dimensional axes arrays for each dimension
     """
     return tuple([get_point_axis(d, s, o)
-                  for d,s,o in zip(dimensions, spacing, origin)])
+                  for d, s, o in zip(dimensions, spacing, origin)])
 
-def get_cell_axes(dimensions:tuple, spacing:tuple, origin:tuple):
+
+def get_cell_axes(dimensions: tuple, spacing: tuple, origin: tuple):
     """
     Get one-dimensional cell axes for each dimension. Can be handy
     when creating cell datasets in ImageData based upon position.
@@ -787,9 +822,10 @@ def get_cell_axes(dimensions:tuple, spacing:tuple, origin:tuple):
         One-dimensional axes arrays for each dimension
     """
     return tuple([get_cell_axis(d, s, o)
-                  for d,s,o in zip(dimensions, spacing, origin)])
+                  for d, s, o in zip(dimensions, spacing, origin)])
 
-def mesh_axes(*xi:ArrayLike, indexing:str="ij", **kwargs):
+
+def mesh_axes(*xi: ArrayLike, indexing: str = "ij", **kwargs):
     """
     Convenient wrapper for np.meshgrid() with indexing
     set to "ij".

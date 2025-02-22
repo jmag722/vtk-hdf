@@ -3,11 +3,11 @@ import numpy as np
 
 import vtkhdf.image as v5i
 
-dimensions = (1200, 1501, 653) # 9.4 GB per 64-bit dataset!
+dimensions = (1200, 1501, 653)  # 9.4 GB per 64-bit dataset!
 spacing = (1e-3, 2e-3, 5e-4)
 origin = v5i.origin_of_centered_image(dimensions, spacing, 2)
 
-x,y,z = v5i.get_point_axes(dimensions, spacing, origin)
+x, y, z = v5i.get_point_axes(dimensions, spacing, origin)
 
 cache_slice_nbytes = dimensions[0] * dimensions[1] * 8
 filename = f"mybigimage{v5i.EXTENSION}"
